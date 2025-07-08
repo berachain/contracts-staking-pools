@@ -1,0 +1,182 @@
+/// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.30;
+
+import "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
+
+import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
+import { AccountingOracle } from "src/AccountingOracle.sol";
+import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
+import { SmartOperator } from "src/core/SmartOperator.sol";
+import { StakingPool } from "src/core/StakingPool.sol";
+import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
+import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
+import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { BeaconRoots } from "src/libraries/BeaconRoots.sol";
+import { MockEIP4788 } from "test/mock/MockEIP4788.sol";
+import { MockBeaconDeposit } from "test/mock/MockBeaconDeposit.sol";
+import { MockBeraChef } from "test/mock/MockBeraChef.sol";
+import { MockHoney } from "test/mock/MockHoney.sol";
+import { MockBGT } from "test/mock/MockBGT.sol";
+import { MockBGTStaker } from "test/mock/MockBGTStaker.sol";
+import { MockEIP7002 } from "test/mock/MockEIP7002.sol";
+import { ElWithdrawHelper } from "src/helpers/ElWithdrawHelper.sol";
+
+abstract contract Base is Test {
+    address public constant EIP_7002 = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
+    address public constant BEACON_DEPOSIT = 0x4242424242424242424242424242424242424242;
+    address public constant BERA_CHEF = 0xdf960E8F3F19C481dDE769edEDD439ea1a63426a;
+    address public constant BGT = 0x656b95E550C07a9ffe548bd4085c72418Ceb1dba;
+    address public constant BGT_STAKER = 0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6;
+    address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
+
+    struct ValidatorData {
+        bytes32 beaconBlockRoot;
+        uint64 index;
+        bytes pubkey;
+        address withdrawalAddress;
+        bytes32[] pubkeyProof;
+        bytes32[] withdrawalCredentialsProof;
+    }
+
+    AccountingOracle accountingOracle;
+    StakingPoolContractsFactory stakingPoolContractsFactory;
+
+    IncentiveCollector incentiveCollectorImpl;
+    SmartOperator smartOperatorImpl;
+    StakingPool stakingPoolImpl;
+    StakingRewardsVault stakingRewardsVaultImpl;
+    WithdrawalRequestERC721 withdrawalRequestERC721Impl;
+    WithdrawalVault withdrawalVaultImpl;
+
+    MockEIP4788 mockEIP4788;
+    MockEIP7002 mockEIP7002;
+    MockBeaconDeposit mockBeaconDeposit;
+    MockBeraChef mockBeraChef;
+    MockHoney mockHoney;
+    MockBGT mockBGT;
+    MockBGTStaker mockBGTStaker;
+
+    ValidatorData validatorData;
+
+    function setUp() public virtual {
+        _loadValidatorData();
+        _deployMockContracts();
+        _initializeStakingPoolContractsFactory();
+    }
+
+    function _initializeStakingPoolContractsFactory() internal {
+        accountingOracle = new AccountingOracle();
+
+        incentiveCollectorImpl = new IncentiveCollector();
+        smartOperatorImpl = new SmartOperator();
+        stakingPoolImpl = new StakingPool();
+        stakingRewardsVaultImpl = new StakingRewardsVault();
+        withdrawalRequestERC721Impl = new WithdrawalRequestERC721();
+        withdrawalVaultImpl = new WithdrawalVault();
+
+        stakingPoolContractsFactory = new StakingPoolContractsFactory();
+        stakingPoolContractsFactory.initialize(
+            address(this),
+            address(accountingOracle),
+            address(smartOperatorImpl),
+            address(stakingPoolImpl),
+            address(stakingRewardsVaultImpl),
+            address(withdrawalRequestERC721Impl),
+            address(incentiveCollectorImpl),
+            address(withdrawalVaultImpl)
+        );
+
+        stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(6_350_779_162_034_176);
+        stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(6_350_779_162_034_177);
+
+        assertEq(stakingPoolContractsFactory.owner(), address(this));
+    }
+
+    function _deployMockContracts() internal {
+        vm.etch(BeaconRoots.ADDRESS, address(new MockEIP4788()).code);
+        mockEIP4788 = MockEIP4788(BeaconRoots.ADDRESS);
+        mockEIP4788.setMockBeaconBlockRoot(validatorData.beaconBlockRoot);
+
+        vm.etch(EIP_7002, address(new MockEIP7002()).code);
+        mockEIP7002 = MockEIP7002(payable(EIP_7002));
+        mockEIP7002.setWithdrawalFee(1);
+
+        vm.etch(BEACON_DEPOSIT, address(new MockBeaconDeposit()).code);
+        mockBeaconDeposit = MockBeaconDeposit(BEACON_DEPOSIT);
+
+        vm.etch(BGT, address(new MockBGT()).code);
+        mockBGT = MockBGT(BGT);
+
+        vm.etch(HONEY_TOKEN, address(new MockHoney()).code);
+        mockHoney = MockHoney(HONEY_TOKEN);
+
+        vm.etch(BERA_CHEF, address(new MockBeraChef()).code);
+        mockBeraChef = MockBeraChef(BERA_CHEF);
+
+        vm.etch(BGT_STAKER, address(new MockBGTStaker()).code);
+        mockBGTStaker = MockBGTStaker(BGT_STAKER);
+    }
+
+    function _deployStakingPoolContracts(bytes memory pubkey) internal {
+        (
+            address smartOperator,
+            address stakingPool,
+            address stakingRewardsVault,
+            address withdrawalRequestERC721,
+            address withdrawalVault,
+            address incentiveCollector
+        ) = stakingPoolContractsFactory.deployStakingPoolContracts(pubkey, address(this), address(this));
+
+        assertEq(smartOperator, stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator);
+        assertEq(stakingPool, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingPool);
+        assertEq(stakingRewardsVault, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingRewardsVault);
+        assertEq(withdrawalRequestERC721, stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalRequestERC721);
+        assertEq(withdrawalVault, stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalVault);
+        assertEq(incentiveCollector, stakingPoolContractsFactory.getCoreContracts(pubkey).incentiveCollector);
+
+        mockBeaconDeposit.setOperator(pubkey, smartOperator);
+    }
+
+    function _getCoreContracts(bytes memory pubkey)
+        internal
+        view
+        returns (StakingPoolContractsFactory.CoreContracts memory)
+    {
+        return stakingPoolContractsFactory.getCoreContracts(pubkey);
+    }
+
+    function _loadValidatorData() internal {
+        // read in proof data
+        validatorData = abi.decode(
+            stdJson.parseRaw(vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_proofs.json")), "$"),
+            (ValidatorData)
+        );
+    }
+
+    function _getStakingPool(bytes memory pubkey) internal view returns (StakingPool) {
+        return StakingPool(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).stakingPool));
+    }
+
+    function _getStakingRewardsVault(bytes memory pubkey) internal view returns (StakingRewardsVault) {
+        return StakingRewardsVault(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).stakingRewardsVault));
+    }
+
+    function _getWithdrawalRequestERC721(bytes memory pubkey) internal view returns (WithdrawalRequestERC721) {
+        return WithdrawalRequestERC721(
+            payable(stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalRequestERC721)
+        );
+    }
+
+    function _getWithdrawalVault(bytes memory pubkey) internal view returns (WithdrawalVault) {
+        return WithdrawalVault(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalVault));
+    }
+
+    function _getIncentiveCollector(bytes memory pubkey) internal view returns (IncentiveCollector) {
+        return IncentiveCollector(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).incentiveCollector));
+    }
+
+    function _getSmartOperator(bytes memory pubkey) internal view returns (SmartOperator) {
+        return SmartOperator(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator));
+    }
+}

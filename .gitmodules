@@ -10,3 +10,6 @@
 [submodule "lib/solady"]
 	path = lib/solady
 	url = https://github.com/Vectorized/solady
+[submodule "lib/contracts"]
+	path = lib/contracts
+	url = https://github.com/berachain/contracts
