@@ -1,8 +1,13 @@
 [profile.default]
+solc = "0.8.30"
+evm_version = "prague"
 src = "src"
+script = "script"
 out = "out"
 libs = ["lib"]
 fs_permissions = [{ access = "read", path = "./test"}, { access = "read", path = "./out"}]
+bytecode_hash = "none"
+cbor_metadata = false
 
 [fmt]
 bracket_spacing = true

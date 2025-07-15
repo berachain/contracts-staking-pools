@@ -6,6 +6,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { UpgradeableBeacon } from "@solady/src/utils/UpgradeableBeacon.sol";
 import { LibClone } from "@solady/src/utils/LibClone.sol";
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
+import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
@@ -14,7 +15,12 @@ import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
 import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
 
-contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, UUPSUpgradeable {
+contract StakingPoolContractsFactory is
+    ICoreContractsStorage,
+    BeaconRootsHelper,
+    OwnableUpgradeable,
+    UUPSUpgradeable
+{
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
     uint256 public constant INITIAL_PAYOUT_AMOUNT = 100 ether;
 
@@ -28,23 +34,21 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
         address incentiveCollector
     );
     event StakingPoolActivated(address stakingPool);
+    event SmartOperatorBeaconImplUpgraded(address newImplementation);
+    event StakingPoolBeaconImplUpgraded(address newImplementation);
+    event StakingRewardsVaultBeaconImplUpgraded(address newImplementation);
+    event WithdrawalRequestERC721BeaconImplUpgraded(address newImplementation);
+    event IncentiveCollectorBeaconImplUpgraded(address newImplementation);
+    event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
 
     // ERRORS
     error StakingPoolAlreadyExists();
     error InvalidOperator();
     error InvalidWithdrawalCredentials();
-
-    struct CoreContracts {
-        address smartOperator;
-        address stakingPool;
-        address stakingRewardsVault;
-        address withdrawalRequestERC721;
-        address withdrawalVault;
-        address incentiveCollector;
-    }
+    error InvalidAddress();
 
     // STORAGE
-    address internal _accountingOracle;
+    address public accountingOracle;
     address internal _beaconSmartOperator;
     address internal _beaconStakingPool;
     address internal _beaconStakingRewardsVault;
@@ -54,11 +58,15 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
 
     mapping(bytes => CoreContracts) internal _coreContracts;
 
+    constructor() {
+        _disableInitializers();
+    }
+
     function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 
     function initialize(
         address governance,
-        address accountingOracle,
+        address accountingOracle_,
         address smartOperatorInitialImpl,
         address stakingPoolInitialImpl,
         address stakingRewardsVaultInitialImpl,
@@ -72,18 +80,17 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
         __Ownable_init(governance);
         __UUPSUpgradeable_init();
 
-        _accountingOracle = accountingOracle;
+        accountingOracle = accountingOracle_;
 
-        _beaconSmartOperator = address(new UpgradeableBeacon(governance, smartOperatorInitialImpl));
-        _beaconStakingPool = address(new UpgradeableBeacon(governance, stakingPoolInitialImpl));
-        _beaconStakingRewardsVault = address(new UpgradeableBeacon(governance, stakingRewardsVaultInitialImpl));
-        _beaconWithdrawalRequestERC721 = address(new UpgradeableBeacon(governance, withdrawalRequestQueueInitialImpl));
-        _beaconIncentiveCollector = address(new UpgradeableBeacon(governance, incentiveCollectorInitialImpl));
-        _beaconWithdrawalVault = address(new UpgradeableBeacon(governance, withdrawalVaultInitialImpl));
-    }
-
-    function getCoreContracts(bytes memory pubkey) external view returns (CoreContracts memory) {
-        return _coreContracts[pubkey];
+        // Initialize beacons with the initial implementation addresses
+        // Note: Only the factory contract can upgrade these beacons
+        _beaconSmartOperator = address(new UpgradeableBeacon(address(this), smartOperatorInitialImpl));
+        _beaconStakingPool = address(new UpgradeableBeacon(address(this), stakingPoolInitialImpl));
+        _beaconStakingRewardsVault = address(new UpgradeableBeacon(address(this), stakingRewardsVaultInitialImpl));
+        _beaconWithdrawalRequestERC721 =
+            address(new UpgradeableBeacon(address(this), withdrawalRequestQueueInitialImpl));
+        _beaconIncentiveCollector = address(new UpgradeableBeacon(address(this), incentiveCollectorInitialImpl));
+        _beaconWithdrawalVault = address(new UpgradeableBeacon(address(this), withdrawalVaultInitialImpl));
     }
 
     function deployStakingPoolContracts(
@@ -111,31 +118,17 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
             LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
         coreContracts.withdrawalVault = LibClone.deployDeterministicERC1967BeaconProxy(_beaconWithdrawalVault, salt);
 
-        SmartOperator(coreContracts.smartOperator).initialize(
-            owner(),
-            pubkey,
-            validatorAdmin,
-            coreContracts.stakingPool,
-            coreContracts.incentiveCollector,
-            coreContracts.withdrawalRequestERC721
-        );
+        SmartOperator(coreContracts.smartOperator).initialize(owner(), pubkey, validatorAdmin, address(this));
         StakingPool(payable(coreContracts.stakingPool)).initialize(
-            owner(),
-            pubkey,
-            defaultSharesRecipient,
-            address(this),
-            coreContracts.smartOperator,
-            coreContracts.stakingRewardsVault,
-            coreContracts.withdrawalRequestERC721,
-            coreContracts.withdrawalVault,
-            _accountingOracle
+            owner(), pubkey, defaultSharesRecipient, address(this)
         );
+
         StakingRewardsVault(payable(coreContracts.stakingRewardsVault)).initialize(owner(), coreContracts.stakingPool);
         WithdrawalRequestERC721(payable(coreContracts.withdrawalRequestERC721)).initialize(
-            owner(), pubkey, coreContracts.stakingPool, coreContracts.withdrawalVault, coreContracts.smartOperator
+            owner(), pubkey, address(this)
         );
         IncentiveCollector(payable(coreContracts.incentiveCollector)).initialize(
-            owner(), INITIAL_PAYOUT_AMOUNT, coreContracts.stakingRewardsVault
+            owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey
         );
         WithdrawalVault(payable(coreContracts.withdrawalVault)).initialize(
             owner(), coreContracts.withdrawalRequestERC721
@@ -158,6 +151,10 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
             coreContracts.withdrawalVault,
             coreContracts.incentiveCollector
         );
+    }
+
+    function getCoreContracts(bytes memory pubkey) external view returns (CoreContracts memory) {
+        return _coreContracts[pubkey];
     }
 
     function predictStakingPoolContractsAddresses(bytes memory pubkey) external view returns (CoreContracts memory) {
@@ -212,6 +209,89 @@ contract StakingPoolContractsFactory is BeaconRootsHelper, OwnableUpgradeable, U
         StakingPool(payable(coreContracts.stakingPool)).activate(initialDepositAmount);
 
         emit StakingPoolActivated(coreContracts.stakingPool);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*              UPGRADE BEACON IMPLEMENTATIONS                */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    /// @notice Upgrades the implementation of the SmartOperator beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeSmartOperatorBeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconSmartOperator, newImplementation);
+
+        emit SmartOperatorBeaconImplUpgraded(newImplementation);
+    }
+
+    /// @notice Upgrades the implementation of the StakingPool beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeStakingPoolBeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconStakingPool, newImplementation);
+
+        emit StakingPoolBeaconImplUpgraded(newImplementation);
+    }
+
+    /// @notice Upgrades the implementation of the StakingRewardsVault beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeStakingRewardsVaultBeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconStakingRewardsVault, newImplementation);
+
+        emit StakingRewardsVaultBeaconImplUpgraded(newImplementation);
+    }
+
+    /// @notice Upgrades the implementation of the WithdrawalRequestERC721 beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconWithdrawalRequestERC721, newImplementation);
+
+        emit WithdrawalRequestERC721BeaconImplUpgraded(newImplementation);
+    }
+
+    /// @notice Upgrades the implementation of the IncentiveCollector beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconIncentiveCollector, newImplementation);
+
+        emit IncentiveCollectorBeaconImplUpgraded(newImplementation);
+    }
+
+    /// @notice Upgrades the implementation of the WithdrawalVault beacon
+    /// @param newImplementation The address of the new implementation contract
+    /// @dev Only callable by the owner of the factory contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function upgradeWithdrawalVaultBeaconImpl(address newImplementation) external {
+        _checkOwner();
+        _upgradeBeaconImpl(_beaconWithdrawalVault, newImplementation);
+
+        emit WithdrawalVaultBeaconImplUpgraded(newImplementation);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+
+    /// @notice Upgrades the implementation of a beacon
+    /// @param beacon The address of the beacon to upgrade
+    /// @param newImplementation The address of the new implementation contract
+    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    function _upgradeBeaconImpl(address beacon, address newImplementation) internal {
+        if (newImplementation == address(0)) {
+            revert InvalidAddress();
+        }
+        UpgradeableBeacon(beacon).upgradeTo(newImplementation);
     }
 
     function _getSalt(bytes memory pubkey) internal pure returns (bytes32) {

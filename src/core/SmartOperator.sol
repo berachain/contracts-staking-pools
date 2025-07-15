@@ -8,6 +8,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
+import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 
 contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgradeable {
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
@@ -36,9 +37,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         address governance,
         bytes memory pubkey,
         address validatorAdmin,
-        address stakingPool,
-        address incentiveCollector,
-        address withdrawalRequestERC721
+        address factory
     )
         public
         initializer
@@ -55,9 +54,11 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         _pubkey = pubkey;
         BERA_CHEF.queueValCommission(_pubkey, DEFAULT_VAL_COMMISSION);
 
-        _stakingPool = stakingPool;
-        _incentiveCollector = incentiveCollector;
-        _withdrawalRequestERC721 = withdrawalRequestERC721;
+        ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
+
+        _stakingPool = contracts.stakingPool;
+        _incentiveCollector = contracts.incentiveCollector;
+        _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
     }
 
     /// @dev Queues a boost for the smart operator if not already queued to avoid spamming the queue.

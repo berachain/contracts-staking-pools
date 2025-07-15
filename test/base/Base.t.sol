@@ -21,8 +21,10 @@ import { MockBGT } from "test/mock/MockBGT.sol";
 import { MockBGTStaker } from "test/mock/MockBGTStaker.sol";
 import { MockEIP7002 } from "test/mock/MockEIP7002.sol";
 import { ElWithdrawHelper } from "src/helpers/ElWithdrawHelper.sol";
+import { Deployer } from "src/Deployer.sol";
+import { Create2Deployer } from "src/base/Create2Deployer.sol";
 
-abstract contract Base is Test {
+abstract contract Base is Test, Create2Deployer {
     address public constant EIP_7002 = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
     address public constant BEACON_DEPOSIT = 0x4242424242424242424242424242424242424242;
     address public constant BERA_CHEF = 0xdf960E8F3F19C481dDE769edEDD439ea1a63426a;
@@ -42,12 +44,12 @@ abstract contract Base is Test {
     AccountingOracle accountingOracle;
     StakingPoolContractsFactory stakingPoolContractsFactory;
 
-    IncentiveCollector incentiveCollectorImpl;
-    SmartOperator smartOperatorImpl;
-    StakingPool stakingPoolImpl;
-    StakingRewardsVault stakingRewardsVaultImpl;
-    WithdrawalRequestERC721 withdrawalRequestERC721Impl;
-    WithdrawalVault withdrawalVaultImpl;
+    address incentiveCollectorImpl;
+    address smartOperatorImpl;
+    address stakingPoolImpl;
+    address stakingRewardsVaultImpl;
+    address withdrawalRequestERC721Impl;
+    address withdrawalVaultImpl;
 
     MockEIP4788 mockEIP4788;
     MockEIP7002 mockEIP7002;
@@ -66,19 +68,17 @@ abstract contract Base is Test {
     }
 
     function _initializeStakingPoolContractsFactory() internal {
-        accountingOracle = new AccountingOracle();
+        smartOperatorImpl = payable(deployWithCreate2(0, type(SmartOperator).creationCode));
+        stakingPoolImpl = payable(deployWithCreate2(0, type(StakingPool).creationCode));
+        stakingRewardsVaultImpl = payable(deployWithCreate2(0, type(StakingRewardsVault).creationCode));
+        withdrawalRequestERC721Impl = payable(deployWithCreate2(0, type(WithdrawalRequestERC721).creationCode));
+        incentiveCollectorImpl = payable(deployWithCreate2(0, type(IncentiveCollector).creationCode));
+        withdrawalVaultImpl = payable(deployWithCreate2(0, type(WithdrawalVault).creationCode));
 
-        incentiveCollectorImpl = new IncentiveCollector();
-        smartOperatorImpl = new SmartOperator();
-        stakingPoolImpl = new StakingPool();
-        stakingRewardsVaultImpl = new StakingRewardsVault();
-        withdrawalRequestERC721Impl = new WithdrawalRequestERC721();
-        withdrawalVaultImpl = new WithdrawalVault();
-
-        stakingPoolContractsFactory = new StakingPoolContractsFactory();
-        stakingPoolContractsFactory.initialize(
+        Deployer deployer = new Deployer(
             address(this),
-            address(accountingOracle),
+            0,
+            0,
             address(smartOperatorImpl),
             address(stakingPoolImpl),
             address(stakingRewardsVaultImpl),
@@ -86,6 +86,9 @@ abstract contract Base is Test {
             address(incentiveCollectorImpl),
             address(withdrawalVaultImpl)
         );
+
+        accountingOracle = deployer.accountingOracle();
+        stakingPoolContractsFactory = deployer.stakingPoolContractsFactory();
 
         stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(6_350_779_162_034_176);
         stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(6_350_779_162_034_177);

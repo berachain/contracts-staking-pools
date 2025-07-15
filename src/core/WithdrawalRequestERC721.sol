@@ -7,6 +7,7 @@ import { ERC721EnumerableUpgradeable } from
     "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import { ERC721Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 
 interface ISmartOperator {
     function unboostedBalance() external view returns (uint256);
@@ -73,16 +74,7 @@ contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, 
         _disableInitializers();
     }
 
-    function initialize(
-        address governance,
-        bytes memory pubkey,
-        address stakingPool,
-        address withdrawalVault,
-        address smartOperator
-    )
-        public
-        initializer
-    {
+    function initialize(address governance, bytes memory pubkey, address factory) public initializer {
         __ERC721_init("Berachain Staking Pool Withdrawal Request", "BSPWR");
         __ERC721Enumerable_init();
         __AccessControl_init();
@@ -90,9 +82,11 @@ contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
 
         _pubkey = pubkey;
-        _stakingPool = IStakingPool(stakingPool);
-        _withdrawalVault = IWithdrawalVault(withdrawalVault);
-        _smartOperator = ISmartOperator(smartOperator);
+
+        ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
+        _stakingPool = IStakingPool(contracts.stakingPool);
+        _withdrawalVault = IWithdrawalVault(contracts.withdrawalVault);
+        _smartOperator = ISmartOperator(contracts.smartOperator);
     }
 
     function supportsInterface(bytes4 interfaceId)

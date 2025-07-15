@@ -7,6 +7,7 @@ import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/P
 import { stBERA } from "src/base/stBERA.sol";
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
+import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 
 interface IStakingRewardsVault {
     function withdrawRewards(uint256 amount) external;
@@ -67,12 +68,7 @@ contract StakingPool is IStakingPool, stBERA, Initializable, PausableUpgradeable
         address governance,
         bytes memory pubkey,
         address defaultSharesRecipient,
-        address factory,
-        address smartOperator,
-        address stakingRewardsVault,
-        address withdrawalRequestERC721,
-        address withdrawalVault,
-        address accountingOracle
+        address factory
     )
         public
         initializer
@@ -82,11 +78,14 @@ contract StakingPool is IStakingPool, stBERA, Initializable, PausableUpgradeable
         _defaultSharesRecipient = defaultSharesRecipient;
 
         _factory = factory;
-        _smartOperator = smartOperator;
-        _stakingRewardsVault = stakingRewardsVault;
-        _withdrawalRequestERC721 = withdrawalRequestERC721;
-        _withdrawalVault = withdrawalVault;
-        _accountingOracle = accountingOracle;
+
+        ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
+
+        _smartOperator = contracts.smartOperator;
+        _stakingRewardsVault = contracts.stakingRewardsVault;
+        _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
+        _withdrawalVault = contracts.withdrawalVault;
+        _accountingOracle = ICoreContractsStorage(factory).accountingOracle();
         _pause();
     }
 

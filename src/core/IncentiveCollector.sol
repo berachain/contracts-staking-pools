@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 
 contract IncentiveCollector is Initializable, AccessControlUpgradeable {
     // EVENTS
@@ -29,13 +30,22 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
         _donate();
     }
 
-    function initialize(address governance, uint256 _payoutAmount, address stakingRewardsVault) public initializer {
+    function initialize(
+        address governance,
+        uint256 _payoutAmount,
+        address factory,
+        bytes memory pubkey
+    )
+        public
+        initializer
+    {
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
 
         payoutAmount = _payoutAmount;
-        _stakingRewardsVault = stakingRewardsVault;
+        ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
+        _stakingRewardsVault = contracts.stakingRewardsVault;
     }
 
     /// @notice Updates the payout amount required to claim incentives
