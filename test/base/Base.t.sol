@@ -41,6 +41,15 @@ abstract contract Base is Test, Create2Deployer {
         bytes32[] withdrawalCredentialsProof;
     }
 
+    struct ValidatorBalanceData {
+        bytes32 beaconBlockRoot;
+        uint64 index;
+        bytes pubkey;
+        uint64 balance;
+        bytes32 balancesLeaf;
+        bytes32[] balanceProofs;
+    }
+
     AccountingOracle accountingOracle;
     StakingPoolContractsFactory stakingPoolContractsFactory;
 
@@ -60,6 +69,7 @@ abstract contract Base is Test, Create2Deployer {
     MockBGTStaker mockBGTStaker;
 
     ValidatorData validatorData;
+    ValidatorBalanceData validatorBalanceData;
 
     function setUp() public virtual {
         _loadValidatorData();
@@ -92,6 +102,7 @@ abstract contract Base is Test, Create2Deployer {
 
         stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(6_350_779_162_034_176);
         stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(6_350_779_162_034_177);
+        accountingOracle.setZeroValidatorBalanceGIndex(199_011_604_627_456);
 
         assertEq(stakingPoolContractsFactory.owner(), address(this));
     }
@@ -154,6 +165,16 @@ abstract contract Base is Test, Create2Deployer {
         validatorData = abi.decode(
             stdJson.parseRaw(vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_proofs.json")), "$"),
             (ValidatorData)
+        );
+    }
+
+    function _loadValidatorBalanceData() internal {
+        // read in proof data
+        validatorBalanceData = abi.decode(
+            stdJson.parseRaw(
+                vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_balance_proofs.json")), "$"
+            ),
+            (ValidatorBalanceData)
         );
     }
 

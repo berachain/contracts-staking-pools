@@ -3,8 +3,9 @@ pragma solidity ^0.8.30;
 
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
 
-interface IStakingPoolFactory {
+interface IStakingPoolContractsFactory {
     function getCoreContracts(bytes memory pubkey)
         external
         view
@@ -15,18 +16,12 @@ interface IStakingPool {
     function updateTotalDeposits(uint256 newTotalDeposits) external;
 }
 
-interface ISmartOperator {
-    function dropBoost() external;
-    function redeem(uint256 amount) external;
-}
+contract AccountingOracle is BeaconRootsHelper, AccessControlUpgradeable, UUPSUpgradeable {
+    error NotImplemented();
 
-contract AccountingOracle is AccessControlUpgradeable, UUPSUpgradeable {
     bytes32 public constant FEEDER_ROLE = keccak256("FEEDER_ROLE");
 
-    // EVENTS
-    event TotalDepositsUpdated(uint256 newTotalDeposits);
-    event DropBoostTriggered();
-    event BGTRedeemed(uint256 amount);
+    IStakingPoolContractsFactory internal _factory;
 
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) { }
 
@@ -34,38 +29,42 @@ contract AccountingOracle is AccessControlUpgradeable, UUPSUpgradeable {
         _disableInitializers();
     }
 
-    function initialize(address governance) public initializer {
+    function initialize(address governance, address factory) public initializer {
         __AccessControl_init();
         __UUPSUpgradeable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
+        _factory = IStakingPoolContractsFactory(factory);
     }
 
-    function feed(
+    function updateTotalDeposits(
         bytes memory pubkey,
-        uint256 newTotalDeposits,
-        bool triggerDropBoost,
-        uint256 redeemableBGT
+        uint64 balance,
+        bytes32 balancesLeaf,
+        bytes32[] calldata balanceProofs,
+        uint64 validatorIndex
     )
         external
         onlyRole(FEEDER_ROLE)
     {
-        (address smartOperator, address stakingPool,,,,) = IStakingPoolFactory(msg.sender).getCoreContracts(pubkey);
+        bytes32 beaconBlockRoot = _getBeaconBlockRoot(uint64(block.timestamp));
+        _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProofs, validatorIndex);
 
-        // Phase 1. Updating staking pool total deposits.
-        IStakingPool(stakingPool).updateTotalDeposits(newTotalDeposits);
-        emit TotalDepositsUpdated(newTotalDeposits);
+        (, address stakingPool,,,,) = _factory.getCoreContracts(pubkey);
+        IStakingPool(stakingPool).updateTotalDeposits(balance);
+    }
 
-        // Phase 2. Dropping boost and redeeming Bera if needed.
-        if (triggerDropBoost) {
-            ISmartOperator(smartOperator).dropBoost();
-            emit DropBoostTriggered();
-        }
-        if (redeemableBGT > 0) {
-            ISmartOperator(smartOperator).redeem(redeemableBGT);
-            emit BGTRedeemed(redeemableBGT);
-        }
+    /// @dev Override functions to prevent them from being called even if the index is not used
+    function setZeroValidatorPubkeyGIndex(uint64 /*_zeroValidatorPubkeyGIndex*/ ) public virtual override {
+        revert NotImplemented();
+    }
 
-        // Phase 3. Claim incentives and transfer to incentive collector.
+    /// @dev Override functions to prevent them from being called even if the index is not used
+    function setZeroValidatorWithdrawalCredentialsGIndex(uint64 /*_zeroValidatorWithdrawalCredentialsGIndex*/ )
+        public
+        virtual
+        override
+    {
+        revert NotImplemented();
     }
 }

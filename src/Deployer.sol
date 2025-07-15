@@ -39,7 +39,7 @@ contract Deployer is Create2Deployer {
         );
 
         // initalize the accounting oracle
-        accountingOracle.initialize(governance);
+        accountingOracle.initialize(governance, address(stakingPoolContractsFactory));
 
         // initialize the staking pool contracts factory
         stakingPoolContractsFactory.initialize(
