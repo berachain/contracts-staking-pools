@@ -6,6 +6,7 @@ import { stBERA } from "src/base/stBERA.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 contract StakingPoolTest is Base {
     uint256 constant INITIAL_DEPOSIT_AMOUNT = 10_000 ether;
@@ -269,5 +270,37 @@ contract StakingPoolTest is Base {
         vm.deal(submitter, amount);
         vm.prank(submitter);
         stakingPool.submit{ value: amount }();
+    }
+
+    function test_pause() public {
+        test_activate(); // activate to make sure the staking pool is not paused
+
+        stakingPool.pause();
+        assertTrue(stakingPool.paused());
+    }
+
+    function test_unpause() public {
+        test_pause();
+
+        stakingPool.unpause();
+        assertFalse(stakingPool.paused());
+    }
+
+    function test_pause_Fail_NotOwner() public {
+        test_activate(); // activate to make sure the staking pool is not paused
+
+        address notOwner = makeAddr("notOwner");
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPool.pause();
+    }
+
+    function test_unpause_Fail_NotOwner() public {
+        test_pause();
+
+        address notOwner = makeAddr("notOwner");
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPool.unpause();
     }
 }

@@ -189,6 +189,18 @@ contract StakingPool is IStakingPool, stBERA, Initializable, PausableUpgradeable
         return _submit();
     }
 
+    /// @notice Pauses the staking pool in emergency cases.
+    /// @dev Can only be called by the owner.
+    function pause() external onlyOwner {
+        _pause();
+    }
+
+    /// @notice Unpauses the staking pool in emergency cases.
+    /// @dev Can only be called by the owner.
+    function unpause() external onlyOwner {
+        _unpause();
+    }
+
     /// @notice Submit BERA to the staking pool and receive stBERA shares in return.
     /// @dev This function handles the deposit logic including:
     /// - Calculating effective deposit amounts and any refunds needed
