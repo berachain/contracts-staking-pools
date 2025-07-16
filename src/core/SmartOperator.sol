@@ -10,10 +10,23 @@ import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 
+interface IBGTIncentiveDistributor {
+    struct Claim {
+        bytes32 identifier;
+        address account;
+        uint256 amount;
+        bytes32[] merkleProof;
+    }
+
+    function claim(Claim[] calldata claims) external;
+}
+
 contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgradeable {
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
     IBeraChef public constant BERA_CHEF = IBeraChef(0xdf960E8F3F19C481dDE769edEDD439ea1a63426a);
     IBGTStaker public constant BGT_STAKER = IBGTStaker(0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6);
+    IBGTIncentiveDistributor public constant BGT_INCENTIVE_DISTRIBUTOR =
+        IBGTIncentiveDistributor(0x77DA09bC82652f9A14d1b170a001e759640298e6);
     address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
 
     // ERRORS
@@ -110,10 +123,20 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         BERA_CHEF.queueValCommission(_pubkey, commission);
     }
 
+    /// @notice Collects staker rewards and transfers them to the incentive collector.
     function getStakerRewards() external returns (uint256) {
         uint256 rewards = BGT_STAKER.getReward();
         IERC20(HONEY_TOKEN).transfer(_incentiveCollector, rewards);
         return rewards;
+    }
+
+    /// @notice Claims boost rewards from the incentive distributor and send them to the incentive collector.
+    function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
+        BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
+
+        for (uint256 i = 0; i < tokens.length; i++) {
+            IERC20(tokens[i]).transfer(_incentiveCollector, IERC20(tokens[i]).balanceOf(address(this)));
+        }
     }
 
     function balanceOfBGT() external view returns (uint256) {
