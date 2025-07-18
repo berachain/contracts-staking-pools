@@ -33,7 +33,7 @@ interface IWithdrawalVault {
     )
         external
         payable;
-    function withdrawWithdrawals(uint256 amount, address receiver) external;
+    function withdrawWithdrawals(bytes memory pubkey, uint256 amount, address receiver) external;
 }
 
 contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, AccessControlUpgradeable {
@@ -82,10 +82,10 @@ contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
 
         _pubkey = pubkey;
+        _withdrawalVault = IWithdrawalVault(ICoreContractsStorage(factory).withdrawalVault());
 
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
         _stakingPool = IStakingPool(contracts.stakingPool);
-        _withdrawalVault = IWithdrawalVault(contracts.withdrawalVault);
         _smartOperator = ISmartOperator(contracts.smartOperator);
     }
 
@@ -128,7 +128,7 @@ contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, 
             }
 
             // Trigger withdrawal from vault
-            _withdrawalVault.triggerWithdrawals(_pubkey, amountToWithdraw, maxFeeToPay, msg.sender);
+            _withdrawalVault.triggerWithdrawals{ value: msg.value }(_pubkey, amountToWithdraw, maxFeeToPay, msg.sender);
         }
 
         uint256 requestId = _mintWithdrawalRequest(amountOfAsset, amountOfShares);
@@ -194,7 +194,7 @@ contract WithdrawalRequestERC721 is Initializable, ERC721EnumerableUpgradeable, 
             revert NotEnoughFunds();
         }
 
-        _withdrawalVault.withdrawWithdrawals(request.requiredStBera, request.user);
+        _withdrawalVault.withdrawWithdrawals(_pubkey, request.requiredStBera, request.user);
         _burn(requestId);
         request.finalized = true;
 

@@ -5,6 +5,8 @@ import { ERC1967Utils } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UpgradeableBeacon } from "@solady/src/utils/UpgradeableBeacon.sol";
 
+import { console2 } from "forge-std/console2.sol";
+
 import { Base } from "./base/Base.t.sol";
 import { MockBeaconImpl } from "./mock/MockBeaconImpl.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
@@ -15,7 +17,6 @@ contract StakingPoolsContractsFactoryTest is Base {
         StakingPool,
         StakingRewardsVault,
         WithdrawalRequestERC721,
-        WithdrawalVault,
         IncentiveCollector
     }
 
@@ -24,7 +25,10 @@ contract StakingPoolsContractsFactoryTest is Base {
     }
 
     function test_deployStakingPoolContracts() public {
+        vm.deal(address(this), type(uint256).max);
+
         bytes memory pubkey = validatorData.pubkey;
+        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(address(withdrawalVault));
 
         StakingPoolContractsFactory.CoreContracts memory coreContracts =
             stakingPoolContractsFactory.predictStakingPoolContractsAddresses(pubkey);
@@ -33,26 +37,32 @@ contract StakingPoolsContractsFactoryTest is Base {
             address stakingPool,
             address stakingRewardsVault,
             address withdrawalRequestERC721,
-            address withdrawalVault,
             address incentiveCollector
-        ) = stakingPoolContractsFactory.deployStakingPoolContracts(pubkey, address(this), address(this));
+        ) = stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+            pubkey, withdrawalCredentials, _create96Byte(), address(this), address(this)
+        );
 
-        assertEq(withdrawalVault, validatorData.withdrawalAddress);
+        console2.log("withdrawalVault", address(withdrawalVault));
+        assertEq(address(withdrawalVault), validatorData.withdrawalAddress);
+        console2.log("validatorData.withdrawalAddress", validatorData.withdrawalAddress);
 
         assertEq(smartOperator, coreContracts.smartOperator);
         assertEq(stakingPool, coreContracts.stakingPool);
         assertEq(stakingRewardsVault, coreContracts.stakingRewardsVault);
         assertEq(withdrawalRequestERC721, coreContracts.withdrawalRequestERC721);
-        assertEq(withdrawalVault, coreContracts.withdrawalVault);
         assertEq(incentiveCollector, coreContracts.incentiveCollector);
     }
 
     function test_deployStakingPoolContracts_Fail_AlreadyDeployed() public {
         test_deployStakingPoolContracts();
 
+        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(address(withdrawalVault));
+
         address manager = makeAddr("manager");
-        vm.expectRevert(StakingPoolContractsFactory.StakingPoolAlreadyExists.selector);
-        stakingPoolContractsFactory.deployStakingPoolContracts(validatorData.pubkey, manager, address(this));
+        vm.expectRevert(StakingPoolContractsFactory.OperatorAlreadySet.selector);
+        stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+            validatorData.pubkey, withdrawalCredentials, _create96Byte(), manager, address(this)
+        );
     }
 
     function testFuzz_upgradeBeaconImpl_InvalidAddress(uint8 beaconTypeRaw) public {
@@ -112,8 +122,6 @@ contract StakingPoolsContractsFactoryTest is Base {
             stakingPoolContractsFactory.upgradeWithdrawalRequestERC721BeaconImpl(newImplementation);
         } else if (beacon == BeaconType.IncentiveCollector) {
             stakingPoolContractsFactory.upgradeIncentiveCollectorBeaconImpl(newImplementation);
-        } else if (beacon == BeaconType.WithdrawalVault) {
-            stakingPoolContractsFactory.upgradeWithdrawalVaultBeaconImpl(newImplementation);
         } else {
             revert("Unknown beacon type");
         }
@@ -134,8 +142,6 @@ contract StakingPoolsContractsFactoryTest is Base {
         } else if (beacon == BeaconType.IncentiveCollector) {
             return
                 _getBeaconImplementationAddressFromERC1967Proxy(address(_getIncentiveCollector(validatorData.pubkey)));
-        } else if (beacon == BeaconType.WithdrawalVault) {
-            return _getBeaconImplementationAddressFromERC1967Proxy(address(_getWithdrawalVault(validatorData.pubkey)));
         }
         revert("Unknown beacon");
     }
@@ -161,8 +167,6 @@ contract StakingPoolsContractsFactoryTest is Base {
             emit StakingPoolContractsFactory.WithdrawalRequestERC721BeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.IncentiveCollector) {
             emit StakingPoolContractsFactory.IncentiveCollectorBeaconImplUpgraded(newImpl);
-        } else if (beacon == BeaconType.WithdrawalVault) {
-            emit StakingPoolContractsFactory.WithdrawalVaultBeaconImplUpgraded(newImpl);
         } else {
             revert("Unknown beacon type");
         }

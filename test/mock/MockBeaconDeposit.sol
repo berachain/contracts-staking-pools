@@ -15,6 +15,7 @@ contract MockBeaconDeposit {
         public
         payable
     {
+        setOperator(pubkey, operator);
         emit Deposit(pubkey, credentials, signature, operator);
     }
 

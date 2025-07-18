@@ -28,7 +28,10 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ElWithdrawH
     error InsufficientFee();
 
     // STORAGE
-    address internal _withdrawalRequestERC721;
+    address internal _factory;
+
+    mapping(address => bool) internal _whitelistedWithdrawalRequestERC721;
+    mapping(bytes => uint256) public allocatedWithdrawalsAmount;
 
     constructor() {
         _disableInitializers();
@@ -36,11 +39,22 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ElWithdrawH
 
     receive() external payable { }
 
-    function initialize(address governance, address withdrawalRequestERC721) external initializer {
+    function initialize(address governance, address factory) external initializer {
         __AccessControl_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
-        _withdrawalRequestERC721 = withdrawalRequestERC721;
+        _factory = factory;
+    }
+
+    /// @notice Whitelists a withdrawal request ERC721 contract
+    /// @dev Can only be called by the factory contract
+    /// @param withdrawalRequestERC721 The address of the withdrawal request ERC721 contract to whitelist
+    /// @custom:throws InvalidSender if not called by factory contract
+    function whitelistWithdrawalRequestERC721(address withdrawalRequestERC721) external {
+        if (msg.sender != _factory) {
+            revert InvalidSender();
+        }
+        _whitelistedWithdrawalRequestERC721[withdrawalRequestERC721] = true;
     }
 
     /// @notice Triggers withdrawals from the consensus layer
@@ -61,7 +75,7 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ElWithdrawH
         external
         payable
     {
-        if (msg.sender != _withdrawalRequestERC721) {
+        if (!_whitelistedWithdrawalRequestERC721[msg.sender]) {
             revert InvalidSender();
         }
 
@@ -74,6 +88,7 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ElWithdrawH
         }
 
         _triggerEligibleWithdrawal(pubkey, amount, fee);
+        allocatedWithdrawalsAmount[pubkey] += amount;
         _refundOverpaidFee(fee, refundReceiver);
     }
 
@@ -83,12 +98,14 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ElWithdrawH
     /// @param receiver The address to receive the withdrawn funds
     /// @custom:throws InvalidSender if not called by withdrawal request ERC721
     /// @custom:throws WithdrawalFailed if the transfer to receiver fails
-    function withdrawWithdrawals(uint256 amount, address receiver) external {
-        if (msg.sender != _withdrawalRequestERC721) {
+    function withdrawWithdrawals(bytes memory pubkey, uint256 amount, address receiver) external {
+        if (!_whitelistedWithdrawalRequestERC721[msg.sender]) {
             revert InvalidSender();
         }
         (bool success,) = receiver.call{ value: amount }("");
         if (!success) revert WithdrawalFailed();
+
+        allocatedWithdrawalsAmount[pubkey] -= amount;
 
         emit WithdrawalsWithdrawn(amount);
     }

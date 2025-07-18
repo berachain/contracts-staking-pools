@@ -52,6 +52,7 @@ abstract contract Base is Test, Create2Deployer {
 
     AccountingOracle accountingOracle;
     StakingPoolContractsFactory stakingPoolContractsFactory;
+    WithdrawalVault withdrawalVault;
 
     address incentiveCollectorImpl;
     address smartOperatorImpl;
@@ -83,22 +84,22 @@ abstract contract Base is Test, Create2Deployer {
         stakingRewardsVaultImpl = payable(deployWithCreate2(0, type(StakingRewardsVault).creationCode));
         withdrawalRequestERC721Impl = payable(deployWithCreate2(0, type(WithdrawalRequestERC721).creationCode));
         incentiveCollectorImpl = payable(deployWithCreate2(0, type(IncentiveCollector).creationCode));
-        withdrawalVaultImpl = payable(deployWithCreate2(0, type(WithdrawalVault).creationCode));
 
         Deployer deployer = new Deployer(
             address(this),
-            0,
-            0,
+            1,
+            1,
+            1,
             address(smartOperatorImpl),
             address(stakingPoolImpl),
             address(stakingRewardsVaultImpl),
             address(withdrawalRequestERC721Impl),
-            address(incentiveCollectorImpl),
-            address(withdrawalVaultImpl)
+            address(incentiveCollectorImpl)
         );
 
         accountingOracle = deployer.accountingOracle();
         stakingPoolContractsFactory = deployer.stakingPoolContractsFactory();
+        withdrawalVault = deployer.withdrawalVault();
 
         stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(6_350_779_162_034_176);
         stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(6_350_779_162_034_177);
@@ -133,20 +134,23 @@ abstract contract Base is Test, Create2Deployer {
     }
 
     function _deployStakingPoolContracts(bytes memory pubkey) internal {
+        vm.deal(address(this), type(uint256).max);
+
+        bytes memory withdrawalCredentials = _withdrawalAddressToCredentials(address(withdrawalVault));
         (
             address smartOperator,
             address stakingPool,
             address stakingRewardsVault,
             address withdrawalRequestERC721,
-            address withdrawalVault,
             address incentiveCollector
-        ) = stakingPoolContractsFactory.deployStakingPoolContracts(pubkey, address(this), address(this));
+        ) = stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+            pubkey, withdrawalCredentials, _create96Byte(), address(this), address(this)
+        );
 
         assertEq(smartOperator, stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator);
         assertEq(stakingPool, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingPool);
         assertEq(stakingRewardsVault, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingRewardsVault);
         assertEq(withdrawalRequestERC721, stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalRequestERC721);
-        assertEq(withdrawalVault, stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalVault);
         assertEq(incentiveCollector, stakingPoolContractsFactory.getCoreContracts(pubkey).incentiveCollector);
 
         mockBeaconDeposit.setOperator(pubkey, smartOperator);
@@ -192,15 +196,25 @@ abstract contract Base is Test, Create2Deployer {
         );
     }
 
-    function _getWithdrawalVault(bytes memory pubkey) internal view returns (WithdrawalVault) {
-        return WithdrawalVault(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalVault));
-    }
-
     function _getIncentiveCollector(bytes memory pubkey) internal view returns (IncentiveCollector) {
         return IncentiveCollector(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).incentiveCollector));
     }
 
     function _getSmartOperator(bytes memory pubkey) internal view returns (SmartOperator) {
         return SmartOperator(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator));
+    }
+
+    function _withdrawalAddressToCredentials(address withdrawalAddress)
+        internal
+        pure
+        returns (bytes memory withdrawalCredentials)
+    {
+        // credentials type 0x01 + 11 * 0x00 bytes
+        uint96 withdrawalCredentialsPrefix = 0x010000000000000000000000;
+        return abi.encodePacked(withdrawalCredentialsPrefix, withdrawalAddress);
+    }
+
+    function _create96Byte() internal pure returns (bytes memory) {
+        return abi.encodePacked(bytes32("32"), bytes32("32"), bytes32("32"));
     }
 }

@@ -9,7 +9,7 @@ interface IStakingPoolContractsFactory {
     function getCoreContracts(bytes memory pubkey)
         external
         view
-        returns (address, address, address, address, address, address);
+        returns (address, address, address, address, address);
 }
 
 interface IStakingPool {
@@ -50,7 +50,7 @@ contract AccountingOracle is BeaconRootsHelper, AccessControlUpgradeable, UUPSUp
         bytes32 beaconBlockRoot = _getBeaconBlockRoot(uint64(block.timestamp));
         _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProofs, validatorIndex);
 
-        (, address stakingPool,,,,) = _factory.getCoreContracts(pubkey);
+        (, address stakingPool,,,) = _factory.getCoreContracts(pubkey);
         IStakingPool(stakingPool).updateTotalDeposits(balance);
     }
 

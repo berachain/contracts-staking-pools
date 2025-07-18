@@ -7,9 +7,10 @@ interface ICoreContractsStorage {
         address stakingPool;
         address stakingRewardsVault;
         address withdrawalRequestERC721;
-        address withdrawalVault;
         address incentiveCollector;
     }
+
+    function withdrawalVault() external view returns (address);
 
     function getCoreContracts(bytes memory pubkey) external view returns (CoreContracts memory);
 

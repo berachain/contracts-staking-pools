@@ -211,7 +211,6 @@ contract StakingPoolTest is Base {
         assertEq(amountOfSharesToBurn, withdrawalAmount);
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertEq(stakingPool.bufferedAssets(), submittedAmount - withdrawalAmount);
-        assertEq(address(_getWithdrawalVault(validatorData.pubkey)).balance, withdrawalAmount);
         assertFalse(isFullExited);
     }
 

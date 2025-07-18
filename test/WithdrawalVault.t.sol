@@ -8,12 +8,9 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 import { ElWithdrawHelper } from "src/helpers/ElWithdrawHelper.sol";
 
 contract WithdrawalVaultTest is Base {
-    WithdrawalVault withdrawalVault;
-
     function setUp() public override {
         super.setUp();
         _deployStakingPoolContracts(validatorData.pubkey);
-        withdrawalVault = _getWithdrawalVault(validatorData.pubkey);
     }
 
     function testFuzz_receiveNative(uint256 amount) public {
@@ -26,8 +23,7 @@ contract WithdrawalVaultTest is Base {
         assertEq(address(withdrawalVault).balance, amount);
     }
 
-    function test_triggerWithdrawals() public {
-        uint256 withdrawAmount = 100 ether;
+    function testFuzz_triggerWithdrawals(uint256 withdrawAmount) public {
         uint256 maxFeeToPay = _helper_getWithdrawalFee();
 
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
@@ -37,6 +33,45 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
             validatorData.pubkey, withdrawAmount, maxFeeToPay, makeAddr("receiver")
         );
+
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), withdrawAmount);
+    }
+
+    function test_triggerWithdrawals_Multiple() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
+        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.expectEmit(true, true, true, true);
+        emit ElWithdrawHelper.ElWithdrawalTriggered(validatorData.pubkey, 100 ether, maxFeeToPay);
+        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
+            validatorData.pubkey, 100 ether, maxFeeToPay, makeAddr("receiver")
+        );
+
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 100 ether);
+
+        // Second withdrawal - Same validator
+        vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
+        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.expectEmit(true, true, true, true);
+        emit ElWithdrawHelper.ElWithdrawalTriggered(validatorData.pubkey, 200 ether, maxFeeToPay);
+        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
+            validatorData.pubkey, 200 ether, maxFeeToPay, makeAddr("receiver")
+        );
+
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 300 ether);
+
+        // Third withdrawal - different validator
+        bytes memory pubkey2 = _create96Byte();
+        _deployStakingPoolContracts(pubkey2);
+
+        vm.deal(address(_getWithdrawalRequestERC721(pubkey2)), maxFeeToPay);
+        vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
+        vm.expectEmit(true, true, true, true);
+        emit ElWithdrawHelper.ElWithdrawalTriggered(pubkey2, 150 ether, maxFeeToPay);
+        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(pubkey2, 150 ether, maxFeeToPay, makeAddr("receiver"));
+
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 150 ether);
     }
 
     function test_triggerWithdrawals_RefundOverpaidFee() public {
@@ -103,6 +138,8 @@ contract WithdrawalVaultTest is Base {
     }
 
     function testFuzz_withdrawWithdrawals(uint256 amount) public {
+        testFuzz_triggerWithdrawals(amount);
+
         vm.deal(address(withdrawalVault), amount);
         assertEq(address(withdrawalVault).balance, amount);
 
@@ -110,10 +147,50 @@ contract WithdrawalVaultTest is Base {
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
         emit WithdrawalVault.WithdrawalsWithdrawn(amount);
-        withdrawalVault.withdrawWithdrawals(amount, receiver);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, amount, receiver);
 
         assertEq(address(withdrawalVault).balance, 0);
         assertEq(address(receiver).balance, amount);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 0);
+    }
+
+    function testFuzz_withdrawWithdrawals_Multiple() public {
+        test_triggerWithdrawals_Multiple();
+
+        vm.deal(address(withdrawalVault), 450 ether);
+        assertEq(address(withdrawalVault).balance, 450 ether);
+
+        address receiver = makeAddr("receiver");
+        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalVault.WithdrawalsWithdrawn(100 ether);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 100 ether, receiver);
+
+        assertEq(address(withdrawalVault).balance, 350 ether);
+        assertEq(address(receiver).balance, 100 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 200 ether);
+
+        // Second withdrawal - Same validator
+        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalVault.WithdrawalsWithdrawn(200 ether);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 200 ether, receiver);
+
+        assertEq(address(withdrawalVault).balance, 150 ether);
+        assertEq(address(receiver).balance, 300 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 0);
+
+        // Third withdrawal - different validator
+        bytes memory pubkey2 = _create96Byte();
+
+        vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
+        vm.expectEmit(true, true, true, true);
+        emit WithdrawalVault.WithdrawalsWithdrawn(150 ether);
+        withdrawalVault.withdrawWithdrawals(pubkey2, 150 ether, receiver);
+
+        assertEq(address(withdrawalVault).balance, 0);
+        assertEq(address(receiver).balance, 450 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 0);
     }
 
     function test_withdrawWithdrawals_Fail_InvalidSender() public {
@@ -125,7 +202,7 @@ contract WithdrawalVaultTest is Base {
                 address(_getWithdrawalRequestERC721(validatorData.pubkey))
             )
         );
-        withdrawalVault.withdrawWithdrawals(100 ether, receiver);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 100 ether, receiver);
     }
 
     function test_withdrawWithdrawals_Fail_InsufficientBalance() public {
@@ -134,7 +211,7 @@ contract WithdrawalVaultTest is Base {
         address receiver = makeAddr("receiver");
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectRevert(abi.encodeWithSelector(WithdrawalVault.WithdrawalFailed.selector));
-        withdrawalVault.withdrawWithdrawals(2 ether, receiver);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 2 ether, receiver);
     }
 
     function test_recoverERC20(uint256 amount) public {

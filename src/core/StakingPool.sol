@@ -78,13 +78,12 @@ contract StakingPool is IStakingPool, stBERA, Initializable, PausableUpgradeable
         _defaultSharesRecipient = defaultSharesRecipient;
 
         _factory = factory;
+        _withdrawalVault = ICoreContractsStorage(factory).withdrawalVault();
 
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
-
         _smartOperator = contracts.smartOperator;
         _stakingRewardsVault = contracts.stakingRewardsVault;
         _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
-        _withdrawalVault = contracts.withdrawalVault;
         _accountingOracle = ICoreContractsStorage(factory).accountingOracle();
         _pause();
     }

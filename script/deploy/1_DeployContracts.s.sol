@@ -10,13 +10,17 @@ import { ACCOUNTING_ORACLE_ADDRESS } from "script/Addresses.sol";
 import {
     STAKING_POOL_CONTRACTS_FACTORY_ADDRESS,
     INCENTIVE_COLLECTOR_IMPL_ADDRESS,
+    WITHDRAWAL_VAULT_ADDRESS,
     SMART_OPERATOR_IMPL_ADDRESS,
     STAKING_POOL_IMPL_ADDRESS,
     STAKING_REWARDS_VAULT_IMPL_ADDRESS,
-    WITHDRAWAL_VAULT_IMPL_ADDRESS,
     WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS
 } from "script/Addresses.sol";
-import { ACCOUNTING_ORACLE_PROXY_SALT, STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT } from "script/Salts.sol";
+import {
+    ACCOUNTING_ORACLE_PROXY_SALT,
+    STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,
+    WITHDRAWAL_VAULT_PROXY_SALT
+} from "script/Salts.sol";
 
 contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
     Deployer internal deployer;
@@ -26,24 +30,23 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
     }
 
     function deployContracts() internal {
-        console2.log("Deploying AccoutingOracle and StakingPoolContractsFactory...");
+        console2.log("Deploying AccoutingOracle, StakingPoolContractsFactory and WithdrawalVault...");
         _validateCode("Incentive Collector Impl", INCENTIVE_COLLECTOR_IMPL_ADDRESS);
         _validateCode("Smart Operator Impl", SMART_OPERATOR_IMPL_ADDRESS);
         _validateCode("Staking Pool Impl", STAKING_POOL_IMPL_ADDRESS);
         _validateCode("Staking Rewards Vault Impl", STAKING_REWARDS_VAULT_IMPL_ADDRESS);
-        _validateCode("Withdrawal Vault Impl", WITHDRAWAL_VAULT_IMPL_ADDRESS);
         _validateCode("Withdrawal Request ERC721 Impl", WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS);
 
         deployer = new Deployer(
             msg.sender,
             ACCOUNTING_ORACLE_PROXY_SALT,
             STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,
+            WITHDRAWAL_VAULT_PROXY_SALT,
             SMART_OPERATOR_IMPL_ADDRESS,
             STAKING_POOL_IMPL_ADDRESS,
             STAKING_REWARDS_VAULT_IMPL_ADDRESS,
             WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS,
-            INCENTIVE_COLLECTOR_IMPL_ADDRESS,
-            WITHDRAWAL_VAULT_IMPL_ADDRESS
+            INCENTIVE_COLLECTOR_IMPL_ADDRESS
         );
 
         console2.log("Deployer deployed at:", address(deployer));
@@ -55,6 +58,9 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
         _checkDeploymentAddress(
             "StakingPoolContractsFactory", address(stakingPoolContractsFactory), STAKING_POOL_CONTRACTS_FACTORY_ADDRESS
         );
+
+        withdrawalVault = deployer.withdrawalVault();
+        _checkDeploymentAddress("WithdrawalVault", address(withdrawalVault), WITHDRAWAL_VAULT_ADDRESS);
 
         require(stakingPoolContractsFactory.owner() == msg.sender, "StakingPoolContractsFactory owner is not deployer");
         require(

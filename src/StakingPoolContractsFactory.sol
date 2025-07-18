@@ -22,6 +22,7 @@ contract StakingPoolContractsFactory is
     UUPSUpgradeable
 {
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
+    uint256 public constant FIRST_DEPOSIT_AMOUNT = 10_000 ether;
     uint256 public constant INITIAL_PAYOUT_AMOUNT = 100 ether;
 
     // EVENTS
@@ -30,7 +31,6 @@ contract StakingPoolContractsFactory is
         address stakingPool,
         address stakingRewardsVault,
         address withdrawalRequestERC721,
-        address withdrawalVault,
         address incentiveCollector
     );
     event StakingPoolActivated(address stakingPool);
@@ -42,18 +42,19 @@ contract StakingPoolContractsFactory is
     event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
 
     // ERRORS
-    error StakingPoolAlreadyExists();
+    error OperatorAlreadySet();
     error InvalidOperator();
     error InvalidWithdrawalCredentials();
     error InvalidAddress();
+    error InvalidFirstDepositAmount();
 
     // STORAGE
     address public accountingOracle;
+    address public withdrawalVault;
     address internal _beaconSmartOperator;
     address internal _beaconStakingPool;
     address internal _beaconStakingRewardsVault;
     address internal _beaconWithdrawalRequestERC721;
-    address internal _beaconWithdrawalVault;
     address internal _beaconIncentiveCollector;
 
     mapping(bytes => CoreContracts) internal _coreContracts;
@@ -67,12 +68,12 @@ contract StakingPoolContractsFactory is
     function initialize(
         address governance,
         address accountingOracle_,
+        address withdrawalVault_,
         address smartOperatorInitialImpl,
         address stakingPoolInitialImpl,
         address stakingRewardsVaultInitialImpl,
         address withdrawalRequestQueueInitialImpl,
-        address incentiveCollectorInitialImpl,
-        address withdrawalVaultInitialImpl
+        address incentiveCollectorInitialImpl
     )
         public
         initializer
@@ -81,6 +82,7 @@ contract StakingPoolContractsFactory is
         __UUPSUpgradeable_init();
 
         accountingOracle = accountingOracle_;
+        withdrawalVault = withdrawalVault_;
 
         // Initialize beacons with the initial implementation addresses
         // Note: Only the factory contract can upgrade these beacons
@@ -90,48 +92,29 @@ contract StakingPoolContractsFactory is
         _beaconWithdrawalRequestERC721 =
             address(new UpgradeableBeacon(address(this), withdrawalRequestQueueInitialImpl));
         _beaconIncentiveCollector = address(new UpgradeableBeacon(address(this), incentiveCollectorInitialImpl));
-        _beaconWithdrawalVault = address(new UpgradeableBeacon(address(this), withdrawalVaultInitialImpl));
     }
 
     function deployStakingPoolContracts(
         bytes memory pubkey,
+        bytes memory withdrawalCredentials,
+        bytes memory signature,
         address validatorAdmin,
         address defaultSharesRecipient
     )
         external
-        returns (address, address, address, address, address, address)
+        payable
+        returns (address, address, address, address, address)
     {
-        CoreContracts storage coreContracts = _coreContracts[pubkey];
-        if (coreContracts.smartOperator != address(0)) {
-            revert StakingPoolAlreadyExists();
-        }
+        _validateInputs(pubkey, withdrawalCredentials);
 
-        bytes32 salt = _getSalt(pubkey);
-
-        coreContracts.smartOperator = LibClone.deployDeterministicERC1967BeaconProxy(_beaconSmartOperator, salt);
-        coreContracts.stakingPool = LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingPool, salt);
-        coreContracts.stakingRewardsVault =
-            LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingRewardsVault, salt);
-        coreContracts.withdrawalRequestERC721 =
-            LibClone.deployDeterministicERC1967BeaconProxy(_beaconWithdrawalRequestERC721, salt);
-        coreContracts.incentiveCollector =
-            LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
-        coreContracts.withdrawalVault = LibClone.deployDeterministicERC1967BeaconProxy(_beaconWithdrawalVault, salt);
-
-        SmartOperator(coreContracts.smartOperator).initialize(owner(), pubkey, validatorAdmin, address(this));
-        StakingPool(payable(coreContracts.stakingPool)).initialize(
-            owner(), pubkey, defaultSharesRecipient, address(this)
+        CoreContracts memory coreContracts =
+            _deployAndInizializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
+        WithdrawalVault(payable(withdrawalVault)).whitelistWithdrawalRequestERC721(
+            coreContracts.withdrawalRequestERC721
         );
 
-        StakingRewardsVault(payable(coreContracts.stakingRewardsVault)).initialize(owner(), coreContracts.stakingPool);
-        WithdrawalRequestERC721(payable(coreContracts.withdrawalRequestERC721)).initialize(
-            owner(), pubkey, address(this)
-        );
-        IncentiveCollector(payable(coreContracts.incentiveCollector)).initialize(
-            owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey
-        );
-        WithdrawalVault(payable(coreContracts.withdrawalVault)).initialize(
-            owner(), coreContracts.withdrawalRequestERC721
+        _performFirstDeposit(
+            pubkey, withdrawalCredentials, signature, coreContracts.smartOperator, FIRST_DEPOSIT_AMOUNT
         );
 
         emit StakingPoolContractsDeployed(
@@ -139,7 +122,6 @@ contract StakingPoolContractsFactory is
             coreContracts.stakingPool,
             coreContracts.stakingRewardsVault,
             coreContracts.withdrawalRequestERC721,
-            coreContracts.withdrawalVault,
             coreContracts.incentiveCollector
         );
 
@@ -148,7 +130,6 @@ contract StakingPoolContractsFactory is
             coreContracts.stakingPool,
             coreContracts.stakingRewardsVault,
             coreContracts.withdrawalRequestERC721,
-            coreContracts.withdrawalVault,
             coreContracts.incentiveCollector
         );
     }
@@ -172,8 +153,6 @@ contract StakingPoolContractsFactory is
             LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconWithdrawalRequestERC721, salt, address(this));
         coreContracts.incentiveCollector =
             LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconIncentiveCollector, salt, address(this));
-        coreContracts.withdrawalVault =
-            LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconWithdrawalVault, salt, address(this));
 
         return coreContracts;
     }
@@ -188,15 +167,12 @@ contract StakingPoolContractsFactory is
     )
         external
     {
-        CoreContracts memory coreContracts = _coreContracts[pubkey];
-
-        if (BEACON_DEPOSIT.getOperator(pubkey) != coreContracts.smartOperator) {
+        if (BEACON_DEPOSIT.getOperator(pubkey) != _coreContracts[pubkey].smartOperator) {
             revert InvalidOperator();
         }
-        if (
-            keccak256(withdrawalCredentials)
-                != keccak256(_withdrawalAddressToCredentials(coreContracts.withdrawalVault))
-        ) {
+
+        bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
+        if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
             revert InvalidWithdrawalCredentials();
         }
 
@@ -206,9 +182,9 @@ contract StakingPoolContractsFactory is
             beaconBlockRoot, withdrawalCredentialsProof, withdrawalCredentials, validatorIndex
         );
 
-        StakingPool(payable(coreContracts.stakingPool)).activate(initialDepositAmount);
+        StakingPool(payable(_coreContracts[pubkey].stakingPool)).activate(initialDepositAmount);
 
-        emit StakingPoolActivated(coreContracts.stakingPool);
+        emit StakingPoolActivated(_coreContracts[pubkey].stakingPool);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -270,17 +246,6 @@ contract StakingPoolContractsFactory is
         emit IncentiveCollectorBeaconImplUpgraded(newImplementation);
     }
 
-    /// @notice Upgrades the implementation of the WithdrawalVault beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeWithdrawalVaultBeaconImpl(address newImplementation) external {
-        _checkOwner();
-        _upgradeBeaconImpl(_beaconWithdrawalVault, newImplementation);
-
-        emit WithdrawalVaultBeaconImplUpgraded(newImplementation);
-    }
-
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
 
     /// @notice Upgrades the implementation of a beacon
@@ -306,5 +271,75 @@ contract StakingPoolContractsFactory is
         // credentials type 0x01 + 11 * 0x00 bytes
         uint96 withdrawalCredentialsPrefix = 0x010000000000000000000000;
         return abi.encodePacked(withdrawalCredentialsPrefix, withdrawalAddress);
+    }
+
+    /// @dev Checks that:
+    /// - The operator is not already set for this pubkey
+    /// - The withdrawal credentials match the withdrawalVault address
+    /// - The msg.value matches FIRST_DEPOSIT_AMOUNT
+    function _validateInputs(bytes memory pubkey, bytes memory withdrawalCredentials) internal view {
+        if (BEACON_DEPOSIT.getOperator(pubkey) != address(0)) {
+            revert OperatorAlreadySet();
+        }
+
+        bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
+        if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
+            revert InvalidWithdrawalCredentials();
+        }
+
+        if (msg.value != FIRST_DEPOSIT_AMOUNT) {
+            revert InvalidFirstDepositAmount();
+        }
+    }
+
+    function _deployAndInizializeCoreContracts(
+        bytes memory pubkey,
+        address validatorAdmin,
+        address defaultSharesRecipient
+    )
+        internal
+        returns (CoreContracts memory)
+    {
+        CoreContracts storage coreContracts = _coreContracts[pubkey];
+
+        bytes32 salt = _getSalt(pubkey);
+
+        coreContracts.smartOperator = LibClone.deployDeterministicERC1967BeaconProxy(_beaconSmartOperator, salt);
+        coreContracts.stakingPool = LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingPool, salt);
+        coreContracts.stakingRewardsVault =
+            LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingRewardsVault, salt);
+        coreContracts.withdrawalRequestERC721 =
+            LibClone.deployDeterministicERC1967BeaconProxy(_beaconWithdrawalRequestERC721, salt);
+        coreContracts.incentiveCollector =
+            LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
+
+        SmartOperator(coreContracts.smartOperator).initialize(owner(), pubkey, validatorAdmin, address(this));
+        StakingPool(payable(coreContracts.stakingPool)).initialize(
+            owner(), pubkey, defaultSharesRecipient, address(this)
+        );
+
+        StakingRewardsVault(payable(coreContracts.stakingRewardsVault)).initialize(owner(), coreContracts.stakingPool);
+        WithdrawalRequestERC721(payable(coreContracts.withdrawalRequestERC721)).initialize(
+            owner(), pubkey, address(this)
+        );
+        IncentiveCollector(payable(coreContracts.incentiveCollector)).initialize(
+            owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey
+        );
+
+        return coreContracts;
+    }
+
+    /// @dev The deposit function in the beacon deposit contract checks that pubkey, withdrawal credentials and
+    /// signature has the correct length.
+    function _performFirstDeposit(
+        bytes memory pubkey,
+        bytes memory withdrawalCredentials,
+        bytes memory depositSignature,
+        address operator,
+        uint256 amount
+    )
+        internal
+    {
+        BEACON_DEPOSIT.deposit{ value: amount }(pubkey, withdrawalCredentials, depositSignature, operator);
     }
 }
