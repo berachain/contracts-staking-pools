@@ -21,6 +21,10 @@ interface IBGTIncentiveDistributor {
     function claim(Claim[] calldata claims) external;
 }
 
+interface IIncentiveCollector {
+    function setPayoutAmount(uint256 payoutAmount) external;
+}
+
 contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgradeable {
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
     IBeraChef public constant BERA_CHEF = IBeraChef(0xdf960E8F3F19C481dDE769edEDD439ea1a63426a);
@@ -35,6 +39,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
     bytes32 public constant VALIDATOR_ADMIN_ROLE = keccak256("VALIDATOR_ADMIN_ROLE");
     bytes32 public constant REWARDS_ALLOCATION_MANAGER_ROLE = keccak256("REWARDS_ALLOCATION_MANAGER_ROLE");
     bytes32 public constant COMMISSION_MANAGER_ROLE = keccak256("COMMISSION_MANAGER_ROLE");
+    bytes32 public constant INCENTIVE_COLLECTOR_MANAGER_ROLE = keccak256("INCENTIVE_COLLECTOR_MANAGER_ROLE");
     uint96 public constant DEFAULT_VAL_COMMISSION = 500; // 5%
 
     bytes internal _pubkey;
@@ -63,6 +68,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
 
         _setRoleAdmin(REWARDS_ALLOCATION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(COMMISSION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
+        _setRoleAdmin(INCENTIVE_COLLECTOR_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
 
         _pubkey = pubkey;
         BERA_CHEF.queueValCommission(_pubkey, DEFAULT_VAL_COMMISSION);
@@ -125,15 +131,16 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
 
     /// @notice Collects staker rewards and transfers them to the incentive collector.
     function getStakerRewards() external returns (uint256) {
-        uint256 rewards = BGT_STAKER.getReward();
+        uint256 rewards = _getStakerRewards();
         IERC20(HONEY_TOKEN).transfer(_incentiveCollector, rewards);
         return rewards;
     }
 
-    /// @notice Claims boost rewards from the incentive distributor and send them to the incentive collector.
+    /// @notice Claims all boost rewards and sends them to the incentive collector.
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
-        BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
+        _getStakerRewards();
 
+        BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
         for (uint256 i = 0; i < tokens.length; i++) {
             IERC20(tokens[i]).transfer(_incentiveCollector, IERC20(tokens[i]).balanceOf(address(this)));
         }
@@ -147,6 +154,20 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         return BGT.unboostedBalanceOf(address(this));
     }
 
+    /// @notice Sets the payout amount for the incentive collector.
+    /// @param payoutAmount The amount of payout to set for the incentive collector.
+    function setIncentiveCollectorPayoutAmount(uint256 payoutAmount)
+        external
+        onlyRole(INCENTIVE_COLLECTOR_MANAGER_ROLE)
+    {
+        IIncentiveCollector(_incentiveCollector).setPayoutAmount(payoutAmount);
+    }
+
+    function _getStakerRewards() internal returns (uint256) {
+        uint256 rewards = BGT_STAKER.getReward();
+        return rewards;
+    }
+
     /// @dev Cancels any queued boost for the smart operator
     /// @notice This function is used to cancel any queued boost for the smart operator
     /// while unboosting all BGTs during full exit.
@@ -157,6 +178,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         }
     }
 
+    /// @dev Validates that the sender is the expected address. Used only for function not protected by RBAC.
     function _validateSender(address expected) internal view {
         if (msg.sender != expected) {
             revert InvalidSender(msg.sender, expected);

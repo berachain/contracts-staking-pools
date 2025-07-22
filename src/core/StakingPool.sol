@@ -380,6 +380,7 @@ contract StakingPool is IStakingPool, stBERA, Initializable, PausableUpgradeable
         emit FullExitTriggered();
     }
 
+    /// @dev Validates that the sender is the expected address. Used only for function not protected by RBAC.
     function _validateSender(address expected) internal view {
         if (msg.sender != expected) {
             revert InvalidSender(msg.sender, expected);

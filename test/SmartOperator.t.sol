@@ -5,6 +5,7 @@ import { Base } from "./base/Base.t.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 
 contract SmartOperatorTest is Base {
     SmartOperator smartOperator;
@@ -92,5 +93,66 @@ contract SmartOperatorTest is Base {
             )
         );
         smartOperator.grantRole(commissionManagerRole, commissionManager);
+    }
+
+    function test_grantRole_IncentiveCollectorManagerRole() public {
+        address validatorAdmin = makeAddr("validatorAdmin");
+        address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
+
+        test_grantRole_ValidatorAdminRole(validatorAdmin);
+
+        bytes32 incentiveCollectorManagerRole = smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE();
+
+        vm.prank(validatorAdmin);
+        smartOperator.grantRole(incentiveCollectorManagerRole, incentiveCollectorManager);
+
+        assertTrue(smartOperator.hasRole(incentiveCollectorManagerRole, incentiveCollectorManager));
+    }
+
+    function test_grantRole_IncentiveCollectorManagerRole_Fail_NotValidatorAdmin() public {
+        address validatorAdminWithoutRole = makeAddr("validatorAdminWithoutRole");
+        address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
+
+        bytes32 incentiveCollectorManagerRole = smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE();
+        bytes32 validatorAdminRole = smartOperator.VALIDATOR_ADMIN_ROLE();
+
+        vm.prank(validatorAdminWithoutRole);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, validatorAdminWithoutRole, validatorAdminRole
+            )
+        );
+        smartOperator.grantRole(incentiveCollectorManagerRole, incentiveCollectorManager);
+    }
+
+    function test_setIncentiveCollectorPayoutAmount() public {
+        address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
+        test_grantRole_IncentiveCollectorManagerRole();
+
+        vm.mockCall(
+            address(_getIncentiveCollector(validatorData.pubkey)),
+            abi.encodeWithSelector(IncentiveCollector.setPayoutAmount.selector),
+            abi.encode(100_000 ether)
+        );
+
+        vm.prank(incentiveCollectorManager);
+        smartOperator.setIncentiveCollectorPayoutAmount(100_000 ether);
+    }
+
+    function test_setIncentiveCollectorPayoutAmount_Fail_NotIncentiveCollectorManager() public {
+        address notIncentiveCollectorManager = makeAddr("notIncentiveCollectorManager");
+        test_grantRole_IncentiveCollectorManagerRole();
+
+        bytes32 incentiveCollectorManagerRole = smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE();
+
+        vm.prank(notIncentiveCollectorManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                notIncentiveCollectorManager,
+                incentiveCollectorManagerRole
+            )
+        );
+        smartOperator.setIncentiveCollectorPayoutAmount(100_000 ether);
     }
 }

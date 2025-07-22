@@ -7,9 +7,11 @@ import { MockERC20 } from "./mock/MockERC20.sol";
 import { MockHoney } from "./mock/MockHoney.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SmartOperator } from "src/core/SmartOperator.sol";
 
 contract IncentiveCollectorTest is Base {
     IncentiveCollector incentiveCollector;
+    SmartOperator smartOperator;
 
     address[] incentiveTokens;
 
@@ -18,6 +20,7 @@ contract IncentiveCollectorTest is Base {
         _deployStakingPoolContracts(validatorData.pubkey);
 
         incentiveCollector = _getIncentiveCollector(validatorData.pubkey);
+        smartOperator = _getSmartOperator(validatorData.pubkey);
 
         MockHoney mockHoney = new MockHoney();
         mockHoney.mint(address(incentiveCollector), 100 ether);
@@ -51,6 +54,7 @@ contract IncentiveCollectorTest is Base {
         uint256 defaultPayoutAmount = incentiveCollector.payoutAmount();
         assertEq(defaultPayoutAmount, 100 ether); // default payout amount is 100 ether
 
+        vm.prank(address(smartOperator));
         vm.expectEmit(true, true, true, true);
         emit IncentiveCollector.PayoutAmountSet(payoutAmount);
         incentiveCollector.setPayoutAmount(payoutAmount);
@@ -61,12 +65,9 @@ contract IncentiveCollectorTest is Base {
     function test_setPayoutAmount_Fail_InvalidSender() public {
         address invalidSender = makeAddr("invalidSender");
 
-        bytes32 defaultAdminRole = incentiveCollector.DEFAULT_ADMIN_ROLE();
         vm.prank(invalidSender);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, invalidSender, defaultAdminRole
-            )
+            abi.encodeWithSelector(IncentiveCollector.InvalidSender.selector, invalidSender, address(smartOperator))
         );
         incentiveCollector.setPayoutAmount(2);
     }

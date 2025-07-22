@@ -13,11 +13,13 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
     event IncentiveClaimed(address indexed from, uint256 amount);
 
     // ERRORS
+    error InvalidSender(address sender, address expected);
     error IncorrectPayoutAmount();
     error TransferFailed();
 
     // STORAGE
     uint256 public payoutAmount;
+    address internal _smartOperator;
     address internal _stakingRewardsVault;
 
     constructor() {
@@ -45,12 +47,14 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
 
         payoutAmount = _payoutAmount;
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
+        _smartOperator = contracts.smartOperator;
         _stakingRewardsVault = contracts.stakingRewardsVault;
     }
 
     /// @notice Updates the payout amount required to claim incentives
     /// @param _payoutAmount The new payout amount in native tokens
-    function setPayoutAmount(uint256 _payoutAmount) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPayoutAmount(uint256 _payoutAmount) external {
+        _validateSender(_smartOperator);
         payoutAmount = _payoutAmount;
         emit PayoutAmountSet(_payoutAmount);
     }
@@ -87,5 +91,12 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
         if (!success) revert TransferFailed();
 
         emit Donated(msg.sender, msg.value);
+    }
+
+    /// @dev Validates that the sender is the expected address. Used only for function not protected by RBAC.
+    function _validateSender(address expected) internal view {
+        if (msg.sender != expected) {
+            revert InvalidSender(msg.sender, expected);
+        }
     }
 }
