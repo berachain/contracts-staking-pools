@@ -5,23 +5,12 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { IStakingPool } from "src/interfaces/IStakingPool.sol";
+import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 
-interface IStakingPool {
-    function receiveRewards() external payable;
-}
-
-contract StakingRewardsVault is Initializable, AccessControlUpgradeable {
+contract StakingRewardsVault is IStakingRewardsVault, Initializable, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
-    // EVENTS
-    event RewardsReceived(uint256 amount);
-    event RewardsWithdrawn(uint256 amount);
-    event ERC20Recovered(address token, address to, uint256 amount);
-
-    // ERRORS
-    error InvalidSender();
-
-    // STORAGE
     IStakingPool internal _stakingPool;
 
     constructor() {
@@ -39,10 +28,7 @@ contract StakingRewardsVault is Initializable, AccessControlUpgradeable {
         _stakingPool = IStakingPool(stakingPool);
     }
 
-    /// @notice Withdraws rewards from the vault to the staking pool
-    /// @dev Can only be called by the staking pool contract
-    /// @param amount The amount of rewards to withdraw
-    /// @custom:throws InvalidSender if not called by staking pool
+    /// @inheritdoc IStakingRewardsVault
     function withdrawRewards(uint256 amount) external {
         if (msg.sender != address(_stakingPool)) {
             revert InvalidSender();
@@ -51,10 +37,7 @@ contract StakingRewardsVault is Initializable, AccessControlUpgradeable {
         emit RewardsWithdrawn(amount);
     }
 
-    /// @notice Recovers ERC20 tokens accidentally sent to the contract
-    /// @param token The address of the ERC20 token to recover
-    /// @param to The address to send the recovered tokens to
-    /// @param amount The amount of tokens to recover
+    /// @inheritdoc IStakingRewardsVault
     function recoverERC20(address token, address to, uint256 amount) external onlyRole(DEFAULT_ADMIN_ROLE) {
         IERC20(token).safeTransfer(to, amount);
         emit ERC20Recovered(token, to, amount);

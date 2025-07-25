@@ -2,5 +2,91 @@
 pragma solidity ^0.8.30;
 
 interface IStakingPool {
-    function submit() external payable returns (uint256);
+    // EVENTS
+
+    event StakingPoolActivated();
+    event StakingRewardsReceived(uint256 amount);
+    event MaxCapacityReached(bytes pubkey);
+    event FullExitTriggered();
+    event TotalDepositsUpdated(uint256 newTotalDeposits);
+    event ActiveTresholdReached();
+
+    // ERRORS
+
+    // Signature: 0x6cbf06ef
+    error StakingPoolAlreadyActivated();
+    // Signature: 0xe1130dba
+    error InvalidSender(address sender, address expected);
+    // Signature: 0x2c5211c6
+    error InvalidAmount();
+    // Signature: 0x90b8ec18
+    error TransferFailed();
+    // Signature: 0x4134ed3a
+    error WithdrawalNotAllowed();
+
+    // GETTERS
+
+    /// @notice Returns the total assets of the staking pool.
+    /// @return totalAssets_ The amount of assets.
+    function totalAssets() external view returns (uint256 totalAssets_);
+
+    /// @notice Returns true if the staking pool has been dismissed.
+    function isFullExited() external view returns (bool);
+
+    // FUNCTIONS
+
+    /// @notice Activates the staking pool with an initial deposit.
+    /// @dev Can only be called once by the factory contract while the pool is paused.
+    /// @param initialDepositAmount The initial amount of assets to deposit into the pool.
+    /// @custom:throws StakingPoolAlreadyActivated if the pool is already activated or has deposits.
+    /// @custom:throws InvalidSender if not called by the factory contract.
+    function activate(uint256 initialDepositAmount) external;
+
+    /// @notice A payable function for execution layer rewards.
+    /// @dev Can only be called by the `StakingRewardsVault`.
+    /// @dev Need a dedicated function because funds receive() is treated as user deposit.
+    function receiveRewards() external payable;
+
+    /// @notice Processes a withdrawal request from a user by burning their shares.
+    /// @dev Can only be called by the withdrawal request ERC721 contract.
+    /// If the pool has not reached the activation treshold yet, assets will be transferred to withdrawal vault.
+    /// If the pool has reached the activation treshold, withdrawals are frozen for the cooldown period.
+    /// @param user The address of the user requesting withdrawal.
+    /// @param assets The amount of BERA to withdraw.
+    /// @return sharesToBurn The amount of shares that were burned.
+    /// @return isFullExited Whether the pool has fully exited.
+    /// @custom:throws InvalidSender if not called by withdrawalRequestERC721.
+    /// @custom:throws WithdrawalNotAllowed if withdrawal cooldown period has not elapsed.
+    /// @custom:throws TransferFailed if transfer to withdrawal vault fails.
+    function notifyWithdrawalRequest(
+        address user,
+        uint256 assets
+    )
+        external
+        returns (uint256 sharesToBurn, bool isFullExited);
+
+    /// @notice Updates the total deposits of the staking pool.
+    /// @dev Meant to be called by the accounting oracle to align total deposits with CL data.
+    /// @param newTotalDeposits The new total deposits of the staking pool.
+    function updateTotalDeposits(uint256 newTotalDeposits) external;
+
+    /// @notice Submit BERA to the staking pool, mints StBERA shares.
+    /// @dev This function handles the deposit logic including:
+    /// - compute effective deposit amounts and any refunds needed
+    /// - mint stBERA shares to the depositor
+    /// - collect rewards from the staking rewards vault if needed
+    /// - deposit to CL if minimum threshold is met
+    /// - pause deposits if maximum capacity is reached
+    /// @return shares The amount of stBERA shares minted to the depositor.
+    function submit() external payable returns (uint256 shares);
+
+    // PAUSABLE
+
+    /// @notice Pauses deposits.
+    /// @dev Admin function.
+    function pause() external;
+
+    /// @notice Unpauses deposits.
+    /// @dev Admin function.
+    function unpause() external;
 }

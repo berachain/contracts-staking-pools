@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import { Base } from "./base/Base.t.sol";
-import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
+import { StakingRewardsVault, IStakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
@@ -20,7 +20,7 @@ contract StakingRewardsVaultTest is Base {
         vm.deal(address(this), amount);
 
         vm.expectEmit(true, true, true, true);
-        emit StakingRewardsVault.RewardsReceived(amount);
+        emit IStakingRewardsVault.RewardsReceived(amount);
         (bool success,) = address(stakingRewardsVault).call{ value: amount }("");
         assertTrue(success);
         assertEq(address(stakingRewardsVault).balance, amount);
@@ -31,7 +31,7 @@ contract StakingRewardsVaultTest is Base {
 
         vm.prank(address(_getStakingPool(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
-        emit StakingRewardsVault.RewardsWithdrawn(amount);
+        emit IStakingRewardsVault.RewardsWithdrawn(amount);
         stakingRewardsVault.withdrawRewards(amount);
     }
 
@@ -40,7 +40,7 @@ contract StakingRewardsVaultTest is Base {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StakingRewardsVault.InvalidSender.selector, address(this), address(stakingRewardsVault)
+                IStakingRewardsVault.InvalidSender.selector, address(this), address(stakingRewardsVault)
             )
         );
         stakingRewardsVault.withdrawRewards(100 ether);
@@ -55,7 +55,7 @@ contract StakingRewardsVaultTest is Base {
 
         vm.prank(address(this));
         vm.expectEmit(true, true, true, true);
-        emit StakingRewardsVault.ERC20Recovered(address(mockERC20), receiver, amount);
+        emit IStakingRewardsVault.ERC20Recovered(address(mockERC20), receiver, amount);
         stakingRewardsVault.recoverERC20(address(mockERC20), receiver, amount);
 
         assertEq(mockERC20.balanceOf(address(stakingRewardsVault)), 0);

@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 import { Base } from "./base/Base.t.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
-import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
+import { WithdrawalRequestERC721, IWithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
 
 contract WithdrawalRequestERC721Test is Base {
@@ -29,7 +29,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.deal(alice, 1);
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, false);
+        emit IWithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, false);
         withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
 
         assertEq(withdrawalRequestERC721.balanceOf(alice), 1);
@@ -54,7 +54,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.deal(alice, 1);
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, true);
+        emit IWithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, true);
         withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
 
         (uint256 requiredStBera, uint256 burnedShares, address user, uint256 requestBlock, bool finalized) =
@@ -69,7 +69,7 @@ contract WithdrawalRequestERC721Test is Base {
     function test_requestWithdrawal_Fail_InvalidAmount() public {
         vm.deal(alice, 1);
         vm.prank(alice);
-        vm.expectRevert(WithdrawalRequestERC721.InvalidAmount.selector);
+        vm.expectRevert(IWithdrawalRequestERC721.InvalidAmount.selector);
         withdrawalRequestERC721.requestWithdrawal{ value: 1 }(0, 1);
     }
 
@@ -89,7 +89,7 @@ contract WithdrawalRequestERC721Test is Base {
 
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawalRequestERC721.WithdrawalRequestFinalized(0);
+        emit IWithdrawalRequestERC721.WithdrawalRequestFinalized(0);
         withdrawalRequestERC721.finalizeWithdrawalRequest(0);
 
         (,,,, bool finalized) = withdrawalRequestERC721.withdrawalRequests(0);
@@ -102,17 +102,17 @@ contract WithdrawalRequestERC721Test is Base {
         test_finalizeWithdrawalRequest();
 
         vm.prank(alice);
-        vm.expectRevert(WithdrawalRequestERC721.RequestAlreadyFinalized.selector);
+        vm.expectRevert(IWithdrawalRequestERC721.RequestAlreadyFinalized.selector);
         withdrawalRequestERC721.finalizeWithdrawalRequest(0);
     }
 
-    function test_finalizeWithdrawalRequest_Fail_RequestNotYetFinalizable() public {
+    function test_finalizeWithdrawalRequest_Fail_RequestNotReady() public {
         test_requestWithdrawal();
 
         vm.roll(vm.getBlockNumber() + (withdrawalRequestERC721.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY() - 1));
 
         vm.prank(alice);
-        vm.expectRevert(WithdrawalRequestERC721.RequestNotYetFinalizable.selector);
+        vm.expectRevert(IWithdrawalRequestERC721.RequestNotReady.selector);
         withdrawalRequestERC721.finalizeWithdrawalRequest(0);
     }
 
@@ -122,7 +122,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.roll(vm.getBlockNumber() + withdrawalRequestERC721.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY());
 
         vm.prank(alice);
-        vm.expectRevert(WithdrawalRequestERC721.NotEnoughFunds.selector);
+        vm.expectRevert(IWithdrawalRequestERC721.NotEnoughFunds.selector);
         withdrawalRequestERC721.finalizeWithdrawalRequest(0);
     }
 
@@ -149,8 +149,8 @@ contract WithdrawalRequestERC721Test is Base {
 
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
-        emit WithdrawalRequestERC721.WithdrawalRequestFinalized(0);
-        emit WithdrawalRequestERC721.WithdrawalRequestFinalized(1);
+        emit IWithdrawalRequestERC721.WithdrawalRequestFinalized(0);
+        emit IWithdrawalRequestERC721.WithdrawalRequestFinalized(1);
         withdrawalRequestERC721.finalizeWithdrawalRequests(requestIds);
 
         assertEq(withdrawalRequestERC721.balanceOf(alice), 0);

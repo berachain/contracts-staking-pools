@@ -6,15 +6,20 @@ import { SmartOperator } from "src/core/SmartOperator.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
+import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 
 contract SmartOperatorTest is Base {
     SmartOperator smartOperator;
+    WithdrawalRequestERC721 withdrawalRequestERC721;
+
+    address validatorFeeManager = makeAddr("validatorFeeManager");
 
     function setUp() public override {
         super.setUp();
         _deployStakingPoolContracts(validatorData.pubkey);
 
         smartOperator = _getSmartOperator(validatorData.pubkey);
+        withdrawalRequestERC721 = _getWithdrawalRequestERC721(validatorData.pubkey);
     }
 
     function test_initialization() public view {
@@ -29,7 +34,6 @@ contract SmartOperatorTest is Base {
     }
 
     function test_grantRole_ValidatorAdminRole(address validatorAdmin) public {
-        vm.prank(validatorAdmin);
         smartOperator.grantRole(smartOperator.VALIDATOR_ADMIN_ROLE(), validatorAdmin);
 
         assertTrue(smartOperator.hasRole(smartOperator.VALIDATOR_ADMIN_ROLE(), validatorAdmin));
@@ -125,6 +129,34 @@ contract SmartOperatorTest is Base {
         smartOperator.grantRole(incentiveCollectorManagerRole, incentiveCollectorManager);
     }
 
+    function test_grantRole_ProtocolFeeManagerRole() public {
+        address validatorAdmin = makeAddr("validatorAdmin");
+
+        test_grantRole_ValidatorAdminRole(validatorAdmin);
+
+        bytes32 validatorFeeManagerRole = smartOperator.PROTOCOL_FEE_MANAGER_ROLE();
+
+        vm.prank(validatorAdmin);
+        smartOperator.grantRole(validatorFeeManagerRole, validatorFeeManager);
+
+        assertTrue(smartOperator.hasRole(validatorFeeManagerRole, validatorFeeManager));
+    }
+
+    function test_grantRole_ProtocolFeeManagerRole_Fail_NotValidatorAdmin() public {
+        address validatorAdminWithoutRole = makeAddr("validatorAdminWithoutRole");
+
+        bytes32 validatorFeeManagerRole = smartOperator.PROTOCOL_FEE_MANAGER_ROLE();
+        bytes32 validatorAdminRole = smartOperator.VALIDATOR_ADMIN_ROLE();
+
+        vm.prank(validatorAdminWithoutRole);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, validatorAdminWithoutRole, validatorAdminRole
+            )
+        );
+        smartOperator.grantRole(validatorFeeManagerRole, validatorFeeManager);
+    }
+
     function test_setIncentiveCollectorPayoutAmount() public {
         address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
         test_grantRole_IncentiveCollectorManagerRole();
@@ -154,5 +186,93 @@ contract SmartOperatorTest is Base {
             )
         );
         smartOperator.setIncentiveCollectorPayoutAmount(100_000 ether);
+    }
+
+    function test_setProtocolFeePercentage() public {
+        test_grantRole_ProtocolFeeManagerRole();
+
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000);
+
+        assertEq(smartOperator.protocolFeePercentage(), 1000);
+    }
+
+    function test_setProtocolFeePercentage_Fail_NotValidatorFeeManager() public {
+        address notValidatorFeeManager = makeAddr("notValidatorFeeManager");
+        test_grantRole_ProtocolFeeManagerRole();
+
+        bytes32 validatorFeeManagerRole = smartOperator.PROTOCOL_FEE_MANAGER_ROLE();
+
+        vm.prank(notValidatorFeeManager);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                notValidatorFeeManager,
+                validatorFeeManagerRole
+            )
+        );
+        smartOperator.setProtocolFeePercentage(1000);
+    }
+
+    function test_redeem_NoFee() public {
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 100 ether);
+        assertEq(address(smartOperator).balance, 0);
+
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(0);
+
+        address receiver = makeAddr("receiver");
+        vm.prank(address(withdrawalRequestERC721));
+        vm.expectEmit(true, true, true, true);
+        emit SmartOperator.BGTRedeemed(receiver, 100 ether, 0);
+        smartOperator.redeem(receiver);
+
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
+        assertEq(address(receiver).balance, 100 ether);
+        assertEq(address(smartOperator).balance, 0);
+    }
+
+    function test_redeem_WithFee() public {
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 100 ether);
+        assertEq(address(smartOperator).balance, 0);
+
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        assertEq(smartOperator.baseRateChargedFees(), 0);
+
+        uint256 snapshot = vm.snapshot();
+
+        address receiver = makeAddr("receiver");
+        vm.prank(address(withdrawalRequestERC721));
+        vm.expectEmit(true, true, true, true);
+        emit SmartOperator.BGTRedeemed(receiver, 100 ether, 0);
+        smartOperator.redeem(receiver);
+
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
+        assertEq(address(receiver).balance, 100 ether);
+        assertEq(address(smartOperator).balance, 0);
+
+        vm.revertTo(snapshot);
+
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        receiver = makeAddr("receiver");
+        vm.prank(address(withdrawalRequestERC721));
+        vm.expectEmit(true, true, true, true);
+        emit SmartOperator.BGTRedeemed(receiver, 190 ether, 10 ether);
+        smartOperator.redeem(receiver);
+
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
+        assertEq(address(receiver).balance, 190 ether);
+        assertEq(address(smartOperator).balance, 10 ether);
+
+        assertEq(smartOperator.baseRateChargedFees(), 10 ether);
     }
 }

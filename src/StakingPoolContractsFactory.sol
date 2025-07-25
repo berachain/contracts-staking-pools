@@ -313,7 +313,7 @@ contract StakingPoolContractsFactory is
         coreContracts.incentiveCollector =
             LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
 
-        SmartOperator(coreContracts.smartOperator).initialize(owner(), pubkey, validatorAdmin, address(this));
+        SmartOperator(payable(coreContracts.smartOperator)).initialize(owner(), pubkey, validatorAdmin, address(this));
         StakingPool(payable(coreContracts.stakingPool)).initialize(
             owner(), pubkey, defaultSharesRecipient, address(this)
         );

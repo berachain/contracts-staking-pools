@@ -5,19 +5,13 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
+import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
+import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 
-contract IncentiveCollector is Initializable, AccessControlUpgradeable {
-    // EVENTS
-    event Donated(address indexed donor, uint256 amount);
-    event PayoutAmountSet(uint256 payoutAmount);
-    event IncentiveClaimed(address indexed from, uint256 amount);
-
-    // ERRORS
-    error InvalidSender(address sender, address expected);
-    error IncorrectPayoutAmount();
-    error TransferFailed();
-
+contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncentiveCollector {
     // STORAGE
+
     uint256 public payoutAmount;
     address internal _smartOperator;
     address internal _stakingRewardsVault;
@@ -26,8 +20,8 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
         _disableInitializers();
     }
 
-    /// @notice Fallback function to handle direct native token transfers to the contract
-    /// @dev Forwards received native token to the staking rewards vault via _donate()
+    /// @notice Fallback function to handle direct native token transfers to the contract.
+    /// @dev Forwards received native token to the staking rewards vault via _donate().
     receive() external payable {
         _donate();
     }
@@ -49,43 +43,48 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable {
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
         _smartOperator = contracts.smartOperator;
         _stakingRewardsVault = contracts.stakingRewardsVault;
+
+        emit PayoutAmountSet(0, _payoutAmount);
     }
 
-    /// @notice Updates the payout amount required to claim incentives
-    /// @param _payoutAmount The new payout amount in native tokens
     function setPayoutAmount(uint256 _payoutAmount) external {
         _validateSender(_smartOperator);
+        emit PayoutAmountSet(payoutAmount, _payoutAmount);
         payoutAmount = _payoutAmount;
-        emit PayoutAmountSet(_payoutAmount);
     }
 
-    /// @notice Claims incentive tokens by paying the required payout amount
-    /// @dev Transfers all balances of specified ERC20 tokens to the caller and forwards the payout amount to the
-    /// staking rewards vault
-    /// @param tokens Array of ERC20 token addresses to claim balances from
-    /// @custom:throws IncorrectPayoutAmount if msg.value does not match required payout amount
-    /// @custom:throws TransferFailed if transfer to staking rewards vault fails
+    /// @inheritdoc IIncentiveCollector
     function claim(address[] calldata tokens) external payable {
         if (msg.value != payoutAmount) {
             revert IncorrectPayoutAmount();
         }
 
-        for (uint256 i = 0; i < tokens.length; i++) {
+        for (uint256 i = 0; i < tokens.length;) {
+            address token = tokens[i];
             uint256 balance = IERC20(tokens[i]).balanceOf(address(this));
             if (balance > 0) {
                 IERC20(tokens[i]).transfer(msg.sender, balance);
+                emit IncentiveTokenClaimed(msg.sender, token, balance);
+            }
+            unchecked {
+                ++i;
             }
         }
 
-        (bool success,) = _stakingRewardsVault.call{ value: payoutAmount }("");
-        if (!success) revert TransferFailed();
+        // Transfer fee to smart operator
+        uint256 fee = ISmartOperator(_smartOperator).computeFee(payoutAmount);
+        if (fee > 0) {
+            SafeTransferLib.safeTransferETH(_smartOperator, fee);
+        }
 
-        emit IncentiveClaimed(msg.sender, payoutAmount);
+        // Transfer remaining payout to staking rewards vault
+        SafeTransferLib.safeTransferETH(_stakingRewardsVault, payoutAmount - fee);
+
+        emit IncentiveTokensClaimed(msg.sender, payoutAmount - fee, fee);
     }
 
-    /// @notice Donates received native tokens to the staking rewards vault
-    /// @dev Forwards all received native tokens to the staking rewards vault
-    /// @custom:throws TransferFailed if transfer to staking rewards vault fails
+    /// @dev Forwards all received native tokens to the staking rewards vault.
+    /// @custom:throws TransferFailed if transfer to staking rewards vault fails.
     function _donate() internal {
         (bool success,) = _stakingRewardsVault.call{ value: msg.value }("");
         if (!success) revert TransferFailed();

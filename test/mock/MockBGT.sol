@@ -3,6 +3,7 @@ pragma solidity ^0.8.26;
 
 import { ERC20 } from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import { Vm } from "forge-std/Test.sol";
+import { console2 } from "forge-std/console2.sol";
 
 contract MockBGT is ERC20 {
     error NotEnoughBoostedBalance();
@@ -22,7 +23,8 @@ contract MockBGT is ERC20 {
         uint128 queuedBoost;
     }
 
-    Vm public vm = Vm(address(0x7109709ECfa91a80626fF3989D68f67F5b1DD12D)); // hevm cheat code (Base.sol)
+    Vm public immutable vm;
+
     mapping(address account => mapping(bytes pubkey => QueuedBoost)) public boostedQueue;
     mapping(address account => mapping(bytes pubkey => QueuedDropBoost)) public dropBoostQueue;
     mapping(address account => mapping(bytes pubkey => uint128)) public boosted;
@@ -31,7 +33,9 @@ contract MockBGT is ERC20 {
 
     uint256 public totalBoosts;
 
-    constructor() ERC20("Mocked BGT", "MBGT") { }
+    constructor(Vm vm_) ERC20("Mocked BGT", "MBGT") {
+        vm = vm_;
+    }
 
     function queueBoost(bytes calldata pubkey, uint128 amount) external {
         userBoosts[msg.sender].queuedBoost += amount;

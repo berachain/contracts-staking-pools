@@ -20,7 +20,6 @@ import { MockHoney } from "test/mock/MockHoney.sol";
 import { MockBGT } from "test/mock/MockBGT.sol";
 import { MockBGTStaker } from "test/mock/MockBGTStaker.sol";
 import { MockEIP7002 } from "test/mock/MockEIP7002.sol";
-import { ElWithdrawHelper } from "src/helpers/ElWithdrawHelper.sol";
 import { Deployer } from "src/Deployer.sol";
 import { Create2Deployer } from "src/base/Create2Deployer.sol";
 
@@ -120,7 +119,7 @@ abstract contract Base is Test, Create2Deployer {
         vm.etch(BEACON_DEPOSIT, address(new MockBeaconDeposit()).code);
         mockBeaconDeposit = MockBeaconDeposit(BEACON_DEPOSIT);
 
-        vm.etch(BGT, address(new MockBGT()).code);
+        vm.etch(BGT, address(new MockBGT(vm)).code);
         mockBGT = MockBGT(BGT);
 
         vm.etch(HONEY_TOKEN, address(new MockHoney()).code);

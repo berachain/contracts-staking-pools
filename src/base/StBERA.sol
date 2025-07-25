@@ -5,17 +5,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { FixedPointMathLib } from "@solady/src/utils/FixedPointMathLib.sol";
 import { IStBera } from "src/interfaces/IStBera.sol";
 
-abstract contract stBERA is IStBera, IERC20 {
-    // EVENTS
-    event SharesMinted(address indexed to, uint256 amount);
-    event SharesBurned(address indexed from, uint256 amount);
-
-    // ERRORS
-    error NotImplemented();
-    error AddressZero();
-    error InsufficientShares();
-
+abstract contract StBERA is IStBera, IERC20 {
     // STORAGE
+
     uint256 internal _totalShares;
     mapping(address => uint256) private _shares;
     mapping(address => mapping(address => uint256)) private _allowances; // Currently unused, just storage placeholder
@@ -24,10 +16,12 @@ abstract contract stBERA is IStBera, IERC20 {
     uint256[50] private _gap;
 
     function name() public pure virtual returns (string memory) {
+        // REVIEW: This should be specific for the staking pool. Maybe having the validator pubkey in the name?
         return "Staked BERA";
     }
 
     function symbol() public pure virtual returns (string memory) {
+        // REVIEW: This as well?
         return "stBERA";
     }
 
@@ -40,32 +34,7 @@ abstract contract stBERA is IStBera, IERC20 {
     }
 
     function balanceOf(address account) public view virtual override(IERC20, IStBera) returns (uint256) {
-        return getAssetByShares(_sharesOf(account));
-    }
-
-    function transfer(address, /*to*/ uint256 /*amount*/ ) public virtual override returns (bool) {
-        revert NotImplemented();
-    }
-
-    function transferFrom(
-        address, /*from*/
-        address, /*to*/
-        uint256 /*amount*/
-    )
-        public
-        virtual
-        override
-        returns (bool)
-    {
-        revert NotImplemented();
-    }
-
-    function allowance(address, /*owner*/ address /*spender*/ ) public view virtual override returns (uint256) {
-        revert NotImplemented();
-    }
-
-    function approve(address, /*spender*/ uint256 /*amount*/ ) public virtual override returns (bool) {
-        revert NotImplemented();
+        return getAssetsByShares(_sharesOf(account));
     }
 
     function sharesOf(address account) external view returns (uint256) {
@@ -76,18 +45,43 @@ abstract contract stBERA is IStBera, IERC20 {
         return FixedPointMathLib.fullMulDiv(assetAmount, _totalShares, _getTotalAssets());
     }
 
-    function getAssetByShares(uint256 sharesAmount) public view returns (uint256) {
+    function getAssetsByShares(uint256 sharesAmount) public view returns (uint256) {
         return FixedPointMathLib.fullMulDiv(sharesAmount, _getTotalAssets(), _totalShares);
     }
 
-    /**
-     * @return totalAssets the total amount of assets managed by the staking pool.
-     */
+    // IERC20 FUNCTIONS
+
+    function transfer(address to, uint256 amount) public virtual override returns (bool) {
+        to;
+        amount;
+        revert NotImplemented();
+    }
+
+    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
+        from;
+        to;
+        amount;
+        revert NotImplemented();
+    }
+
+    function allowance(address owner, address spender) public view virtual override returns (uint256) {
+        owner;
+        spender;
+        revert NotImplemented();
+    }
+
+    function approve(address spender, uint256 amount) public virtual override returns (bool) {
+        spender;
+        amount;
+        revert NotImplemented();
+    }
+
+    // INTERNAL FUNCTIONS
+
+    /// @dev Returns the total amount of assets managed by the staking pool.
     function _getTotalAssets() internal view virtual returns (uint256);
 
-    /**
-     * @return shares the amount of shares owned by `account`.
-     */
+    /// @dev Returns the amount of shares owned by `account`.
     function _sharesOf(address account) internal view returns (uint256) {
         return _shares[account];
     }

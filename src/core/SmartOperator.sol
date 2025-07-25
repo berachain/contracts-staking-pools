@@ -9,23 +9,17 @@ import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
+import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
+import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
+import { IStakingPool } from "src/interfaces/IStakingPool.sol";
+import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
 
-interface IBGTIncentiveDistributor {
-    struct Claim {
-        bytes32 identifier;
-        address account;
-        uint256 amount;
-        bytes32[] merkleProof;
-    }
+contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeable, PausableUpgradeable {
+    // CONSTANTS
 
-    function claim(Claim[] calldata claims) external;
-}
+    // Berachain references
 
-interface IIncentiveCollector {
-    function setPayoutAmount(uint256 payoutAmount) external;
-}
-
-contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgradeable {
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
     IBeraChef public constant BERA_CHEF = IBeraChef(0xdf960E8F3F19C481dDE769edEDD439ea1a63426a);
     IBGTStaker public constant BGT_STAKER = IBGTStaker(0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6);
@@ -33,19 +27,47 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         IBGTIncentiveDistributor(0x77DA09bC82652f9A14d1b170a001e759640298e6);
     address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
 
-    // ERRORS
-    error InvalidSender(address sender, address expected);
+    // EVENTS
+    event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
+    event ProtocolFeeCollected(uint256 amount, address receiver);
+    event BGTRedeemed(address receiver, uint256 amount, uint256 fee);
 
+    /// @dev Validator admin manages other roles and is managed by the contract owner.
     bytes32 public constant VALIDATOR_ADMIN_ROLE = keccak256("VALIDATOR_ADMIN_ROLE");
+
+    /// @dev Can set the fee percentage and claim fees.
+    bytes32 public constant PROTOCOL_FEE_MANAGER_ROLE = keccak256("PROTOCOL_FEE_MANAGER_ROLE");
+
+    /// @dev Can queue new reward allocations.
     bytes32 public constant REWARDS_ALLOCATION_MANAGER_ROLE = keccak256("REWARDS_ALLOCATION_MANAGER_ROLE");
+
+    /// @dev Can queue validator commission changes.
     bytes32 public constant COMMISSION_MANAGER_ROLE = keccak256("COMMISSION_MANAGER_ROLE");
+
+    /// @dev Can set the payout amount for the incentive collector.
     bytes32 public constant INCENTIVE_COLLECTOR_MANAGER_ROLE = keccak256("INCENTIVE_COLLECTOR_MANAGER_ROLE");
+
+    /// @dev Default validator commission set to 5% (500 basis points).
     uint96 public constant DEFAULT_VAL_COMMISSION = 500; // 5%
+
+    /// @dev Maximum protocol fee set to 20% (2000 basis points).
+    uint96 public constant MAX_PROTOCOL_FEE = 2000;
+
+    /// @dev 100% in basis points.
+    uint96 public constant ONE_HUNDRED_PERCENT = 1e4;
+
+    // STORAGE
 
     bytes internal _pubkey;
     address internal _stakingPool;
     address internal _incentiveCollector;
     address internal _withdrawalRequestERC721;
+
+    uint96 public protocolFeePercentage;
+    uint256 public baseRateChargedFees;
+    uint256 internal _baseRateAlreadyCharged;
+
+    receive() external payable { }
 
     constructor() {
         _disableInitializers();
@@ -69,6 +91,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         _setRoleAdmin(REWARDS_ALLOCATION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(COMMISSION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(INCENTIVE_COLLECTOR_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
+        _setRoleAdmin(PROTOCOL_FEE_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
 
         _pubkey = pubkey;
         BERA_CHEF.queueValCommission(_pubkey, DEFAULT_VAL_COMMISSION);
@@ -80,8 +103,7 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
     }
 
-    /// @dev Queues a boost for the smart operator if not already queued to avoid spamming the queue.
-    /// @notice This function is used to queue a boost for the smart operator.
+    /// @inheritdoc ISmartOperator
     function queueBoost() external whenNotPaused returns (bool) {
         (, uint128 queuedBalance) = BGT.boostedQueue(address(this), _pubkey);
         if (queuedBalance == 0) {
@@ -92,10 +114,13 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         return false;
     }
 
+    /// @inheritdoc ISmartOperator
     function activateBoost() external {
+        // REVIEW address(this) ?
         BGT.activateBoost(msg.sender, _pubkey);
     }
 
+    /// @inheritdoc ISmartOperator
     function queueDropBoost() external {
         _validateSender(_stakingPool);
         _cancelQueueBoost();
@@ -106,15 +131,29 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         _pause();
     }
 
+    /// @inheritdoc ISmartOperator
     function dropBoost() external {
+        // REVIEW address(this) ?
         BGT.dropBoost(msg.sender, _pubkey);
     }
 
-    function redeem(address receiver, uint256 amount) external {
+    /// @inheritdoc ISmartOperator
+    function redeem(address receiver) external {
         _validateSender(_withdrawalRequestERC721);
-        BGT.redeem(receiver, amount);
+        uint256 balance = BGT.balanceOf(address(this));
+
+        if (balance > 0) {
+            _updateBaseRateChargedFees();
+
+            BGT.redeem(address(this), balance);
+
+            SafeTransferLib.safeTransferETH(receiver, balance - baseRateChargedFees);
+
+            emit BGTRedeemed(receiver, balance - baseRateChargedFees, baseRateChargedFees);
+        }
     }
 
+    /// @inheritdoc ISmartOperator
     function queueRewardsAllocation(
         uint64 startBlock,
         IBeraChef.Weight[] calldata weights
@@ -125,18 +164,19 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         BERA_CHEF.queueNewRewardAllocation(_pubkey, startBlock, weights);
     }
 
+    /// @inheritdoc ISmartOperator
     function queueValCommission(uint96 commission) external onlyRole(COMMISSION_MANAGER_ROLE) {
         BERA_CHEF.queueValCommission(_pubkey, commission);
     }
 
-    /// @notice Collects staker rewards and transfers them to the incentive collector.
+    /// @inheritdoc ISmartOperator
     function getStakerRewards() external returns (uint256) {
         uint256 rewards = _getStakerRewards();
         IERC20(HONEY_TOKEN).transfer(_incentiveCollector, rewards);
         return rewards;
     }
 
-    /// @notice Claims all boost rewards and sends them to the incentive collector.
+    /// @inheritdoc ISmartOperator
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
         _getStakerRewards();
 
@@ -146,10 +186,13 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         }
     }
 
-    function balanceOfBGT() external view returns (uint256) {
-        return BGT.balanceOf(address(this));
+    /// @inheritdoc ISmartOperator
+    function rebaseableBgtAmount() external view returns (uint256) {
+        uint256 chargableBgtBalance = BGT.balanceOf(address(this)) - _baseRateAlreadyCharged;
+        return BGT.balanceOf(address(this)) - baseRateChargedFees - _computeFee(chargableBgtBalance);
     }
 
+    /// @inheritdoc ISmartOperator
     function unboostedBalance() external view returns (uint256) {
         return BGT.unboostedBalanceOf(address(this));
     }
@@ -163,14 +206,50 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         IIncentiveCollector(_incentiveCollector).setPayoutAmount(payoutAmount);
     }
 
+    /// @notice Sets the protocol fee percentage for the smart operator.
+    /// @param protocolFeePercentage_ The protocol fee percentage to set for the smart operator.
+    function setProtocolFeePercentage(uint96 protocolFeePercentage_) external onlyRole(PROTOCOL_FEE_MANAGER_ROLE) {
+        if (IStakingPool(_stakingPool).isFullExited()) {
+            revert StakingPoolIsFullExited();
+        }
+
+        if (protocolFeePercentage_ > MAX_PROTOCOL_FEE) {
+            revert InvalidProtocolFeePercentage();
+        }
+
+        // Update base rate charged fees before the protocol fee percentage is changed
+        _updateBaseRateChargedFees();
+
+        protocolFeePercentage = protocolFeePercentage_;
+        emit ProtocolFeePercentageSet(protocolFeePercentage_);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function collectProtocolFee(uint256 amount, address receiver) external onlyRole(PROTOCOL_FEE_MANAGER_ROLE) {
+        if (amount > address(this).balance) {
+            revert InvalidAmount();
+        }
+
+        (bool success,) = receiver.call{ value: amount }("");
+        if (!success) revert TransferFailed();
+
+        emit ProtocolFeeCollected(amount, receiver);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function computeFee(uint256 amount) external view returns (uint256) {
+        return _computeFee(amount);
+    }
+
     function _getStakerRewards() internal returns (uint256) {
         uint256 rewards = BGT_STAKER.getReward();
         return rewards;
     }
 
-    /// @dev Cancels any queued boost for the smart operator
-    /// @notice This function is used to cancel any queued boost for the smart operator
-    /// while unboosting all BGTs during full exit.
+    // INTERNAL FUNCTIONS
+
+    /// @dev Cancels any queued boost for the smart operator.
+    /// @dev Used to cancel any queued boost for the smart operator if unboosting during a full exit.
     function _cancelQueueBoost() internal {
         (, uint128 balance) = BGT.boostedQueue(address(this), _pubkey);
         if (balance > 0) {
@@ -183,5 +262,17 @@ contract SmartOperator is Initializable, AccessControlUpgradeable, PausableUpgra
         if (msg.sender != expected) {
             revert InvalidSender(msg.sender, expected);
         }
+    }
+
+    function _computeFee(uint256 amount) internal view returns (uint256) {
+        if (protocolFeePercentage == 0 || amount == 0) return 0;
+        return (amount * protocolFeePercentage) / ONE_HUNDRED_PERCENT;
+    }
+
+    function _updateBaseRateChargedFees() internal {
+        uint256 balance = BGT.balanceOf(address(this));
+        uint256 chargableBgtBalance = balance - _baseRateAlreadyCharged;
+        baseRateChargedFees += _computeFee(chargableBgtBalance);
+        _baseRateAlreadyCharged = balance;
     }
 }

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import { Base } from "./base/Base.t.sol";
-import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
+import { IncentiveCollector, IIncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { MockHoney } from "./mock/MockHoney.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
@@ -15,12 +15,18 @@ contract IncentiveCollectorTest is Base {
 
     address[] incentiveTokens;
 
+    address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
+    address validatorFeeManager = makeAddr("validatorFeeManager");
+
     function setUp() public override {
         super.setUp();
         _deployStakingPoolContracts(validatorData.pubkey);
 
         incentiveCollector = _getIncentiveCollector(validatorData.pubkey);
         smartOperator = _getSmartOperator(validatorData.pubkey);
+
+        smartOperator.grantRole(smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE(), incentiveCollectorManager);
+        smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
 
         MockHoney mockHoney = new MockHoney();
         mockHoney.mint(address(incentiveCollector), 100 ether);
@@ -42,7 +48,7 @@ contract IncentiveCollectorTest is Base {
         assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
 
         vm.expectEmit(true, true, true, true);
-        emit IncentiveCollector.Donated(address(this), amount);
+        emit IIncentiveCollector.Donated(address(this), amount);
         (bool success,) = address(incentiveCollector).call{ value: amount }("");
         assertTrue(success);
 
@@ -56,7 +62,7 @@ contract IncentiveCollectorTest is Base {
 
         vm.prank(address(smartOperator));
         vm.expectEmit(true, true, true, true);
-        emit IncentiveCollector.PayoutAmountSet(payoutAmount);
+        emit IIncentiveCollector.PayoutAmountSet(defaultPayoutAmount, payoutAmount);
         incentiveCollector.setPayoutAmount(payoutAmount);
 
         assertEq(incentiveCollector.payoutAmount(), payoutAmount);
@@ -67,7 +73,7 @@ contract IncentiveCollectorTest is Base {
 
         vm.prank(invalidSender);
         vm.expectRevert(
-            abi.encodeWithSelector(IncentiveCollector.InvalidSender.selector, invalidSender, address(smartOperator))
+            abi.encodeWithSelector(IIncentiveCollector.InvalidSender.selector, invalidSender, address(smartOperator))
         );
         incentiveCollector.setPayoutAmount(2);
     }
@@ -86,15 +92,58 @@ contract IncentiveCollectorTest is Base {
             assertEq(balanceIncentiveCollector, 100 ether);
             uint256 balanceClaimer = IERC20(incentiveTokens[i]).balanceOf(claimer);
             assertEq(balanceClaimer, 0);
+
+            vm.expectEmit(true, true, true, true);
+            emit IIncentiveCollector.IncentiveTokenClaimed(claimer, incentiveTokens[i], balanceIncentiveCollector);
         }
 
         vm.prank(claimer);
         vm.expectEmit(true, true, true, true);
-        emit IncentiveCollector.IncentiveClaimed(claimer, payoutAmount);
+        emit IIncentiveCollector.IncentiveTokensClaimed(claimer, payoutAmount, 0);
         incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
 
         assertEq(address(incentiveCollector).balance, 0);
         assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, payoutAmount);
+
+        for (uint256 i = 0; i < incentiveTokens.length; i++) {
+            uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
+            assertEq(balanceIncentiveCollector, 0);
+            uint256 balanceClaimer = IERC20(incentiveTokens[i]).balanceOf(claimer);
+            assertEq(balanceClaimer, 100 ether);
+        }
+    }
+
+    function test_claim_withProtocolFee() public {
+        uint256 payoutAmount = 100 ether;
+        vm.prank(incentiveCollectorManager);
+        smartOperator.setIncentiveCollectorPayoutAmount(payoutAmount);
+
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        address claimer = makeAddr("claimer");
+        vm.deal(claimer, payoutAmount);
+
+        assertEq(address(incentiveCollector).balance, 0);
+        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
+
+        for (uint256 i = 0; i < incentiveTokens.length; i++) {
+            uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
+            assertEq(balanceIncentiveCollector, 100 ether);
+            uint256 balanceClaimer = IERC20(incentiveTokens[i]).balanceOf(claimer);
+            assertEq(balanceClaimer, 0);
+            vm.expectEmit(true, true, true, true);
+            emit IIncentiveCollector.IncentiveTokenClaimed(claimer, incentiveTokens[i], balanceIncentiveCollector);
+        }
+
+        vm.expectEmit(true, true, true, true);
+        emit IIncentiveCollector.IncentiveTokensClaimed(claimer, payoutAmount - 10 ether, 10 ether);
+        vm.prank(claimer);
+        incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
+
+        assertEq(address(incentiveCollector).balance, 0);
+        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, payoutAmount - 10 ether);
+        assertEq(address(smartOperator).balance, 10 ether);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
             uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
@@ -111,7 +160,7 @@ contract IncentiveCollectorTest is Base {
 
         vm.prank(claimer);
         vm.expectRevert(
-            abi.encodeWithSelector(IncentiveCollector.IncorrectPayoutAmount.selector, incorrectPayingAmount)
+            abi.encodeWithSelector(IIncentiveCollector.IncorrectPayoutAmount.selector, incorrectPayingAmount)
         );
         incentiveCollector.claim{ value: incorrectPayingAmount }(incentiveTokens);
     }
