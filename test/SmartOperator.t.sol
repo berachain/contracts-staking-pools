@@ -247,7 +247,7 @@ contract SmartOperatorTest is Base {
 
         assertEq(smartOperator.baseRateChargedFees(), 0);
 
-        uint256 snapshot = vm.snapshot();
+        uint256 snapshot = vm.snapshotState();
 
         address receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
@@ -259,7 +259,7 @@ contract SmartOperatorTest is Base {
         assertEq(address(receiver).balance, 100 ether);
         assertEq(address(smartOperator).balance, 0);
 
-        vm.revertTo(snapshot);
+        vm.revertToState(snapshot);
 
         mockBGT.mint(address(smartOperator), 100 ether);
 
