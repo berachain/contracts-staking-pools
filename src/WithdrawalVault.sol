@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
@@ -12,7 +12,7 @@ import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 /**
  * @title A vault for temporary storage of withdrawals
  */
-contract WithdrawalVault is Initializable, AccessControlUpgradeable, ELWithdrawHelper, IWithdrawalVault {
+contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgradeable, ELWithdrawHelper {
     using SafeERC20 for IERC20;
 
     // STORAGE
@@ -26,6 +26,8 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ELWithdrawH
         _disableInitializers();
     }
 
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) { }
+
     receive() external payable { }
 
     function initialize(address governance, address factory) external initializer {
@@ -35,10 +37,7 @@ contract WithdrawalVault is Initializable, AccessControlUpgradeable, ELWithdrawH
         _factory = factory;
     }
 
-    /// @notice Whitelists a withdrawal request ERC721 contract
-    /// @dev Can only be called by the factory contract
-    /// @param withdrawalRequestERC721 The address of the withdrawal request ERC721 contract to whitelist
-    /// @custom:throws InvalidSender if not called by factory contract
+    /// @inheritdoc IWithdrawalVault
     function whitelistWithdrawalRequestERC721(address withdrawalRequestERC721) external {
         if (msg.sender != _factory) {
             revert InvalidSender();

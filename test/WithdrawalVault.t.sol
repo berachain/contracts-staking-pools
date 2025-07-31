@@ -2,7 +2,7 @@
 pragma solidity ^0.8.25;
 
 import { Base } from "./base/Base.t.sol";
-import { WithdrawalVault, IWithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault, IWithdrawalVault } from "src/WithdrawalVault.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
@@ -11,6 +11,26 @@ contract WithdrawalVaultTest is Base {
     function setUp() public override {
         super.setUp();
         _deployStakingPoolContracts(validatorData.pubkey);
+    }
+
+    function test_upgrade() public {
+        WithdrawalVault newImplementation = new WithdrawalVault();
+        vm.prank(address(this));
+        withdrawalVault.upgradeToAndCall(address(newImplementation), "");
+    }
+
+    function test_upgrade_Fail_InvalidSender() public {
+        address invalidSender = makeAddr("invalidSender");
+        WithdrawalVault newImplementation = new WithdrawalVault();
+
+        bytes32 defaultAdminRole = withdrawalVault.DEFAULT_ADMIN_ROLE();
+        vm.prank(invalidSender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, invalidSender, defaultAdminRole
+            )
+        );
+        withdrawalVault.upgradeToAndCall(address(newImplementation), "");
     }
 
     function testFuzz_receiveNative(uint256 amount) public {

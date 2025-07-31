@@ -5,7 +5,7 @@ import { Base } from "./base/Base.t.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { WithdrawalRequestERC721, IWithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 
 contract WithdrawalRequestERC721Test is Base {
     WithdrawalRequestERC721 withdrawalRequestERC721;

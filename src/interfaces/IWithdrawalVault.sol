@@ -27,6 +27,12 @@ interface IWithdrawalVault {
 
     // FUNCTIONS
 
+    /// @notice Whitelists a withdrawal request ERC721 contract.
+    /// @dev Can only be called by the factory contract.
+    /// @param withdrawalRequestERC721 The address of the contract to whitelist.
+    /// @custom:throws InvalidSender if not called by factory contract.
+    function whitelistWithdrawalRequestERC721(address withdrawalRequestERC721) external;
+
     /// @notice Triggers withdrawals from the consensus layer through EIP-7002.
     /// @dev Can only be called by the withdrawal request ERC721 contract.
     /// @param pubkey The validator's public key to withdraw from.

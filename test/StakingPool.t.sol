@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import { Base, console2 } from "test/base/Base.t.sol";
 import { StBERA, IStBera } from "src/base/StBERA.sol";
 import { StakingPool, IStakingPool } from "src/core/StakingPool.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";

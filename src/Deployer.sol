@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import { Create2Deployer } from "src/base/Create2Deployer.sol";
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 
 contract Deployer is Create2Deployer {
     /// @notice The AccountingOracle contract.

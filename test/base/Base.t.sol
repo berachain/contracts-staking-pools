@@ -11,7 +11,7 @@ import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import { BeaconRoots } from "src/libraries/BeaconRoots.sol";
 import { MockEIP4788 } from "test/mock/MockEIP4788.sol";
 import { MockBeaconDeposit } from "test/mock/MockBeaconDeposit.sol";

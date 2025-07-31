@@ -12,7 +12,7 @@ import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
 
 contract StakingPoolContractsFactory is
@@ -109,9 +109,7 @@ contract StakingPoolContractsFactory is
 
         CoreContracts memory coreContracts =
             _deployAndInizializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
-        WithdrawalVault(payable(withdrawalVault)).whitelistWithdrawalRequestERC721(
-            coreContracts.withdrawalRequestERC721
-        );
+        IWithdrawalVault(withdrawalVault).whitelistWithdrawalRequestERC721(coreContracts.withdrawalRequestERC721);
 
         _performFirstDeposit(
             pubkey, withdrawalCredentials, signature, coreContracts.smartOperator, FIRST_DEPOSIT_AMOUNT

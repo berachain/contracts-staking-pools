@@ -9,7 +9,7 @@ import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import {
     ACCOUNTING_ORACLE_PROXY_SALT,
     STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,

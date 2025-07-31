@@ -3,7 +3,7 @@ pragma solidity 0.8.30;
 
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
-import { WithdrawalVault } from "src/core/WithdrawalVault.sol";
+import { WithdrawalVault } from "src/WithdrawalVault.sol";
 
 abstract contract Storage {
     AccountingOracle internal accountingOracle;
