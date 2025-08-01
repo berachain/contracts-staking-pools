@@ -124,19 +124,24 @@ contract StakingPoolTest is Base {
             stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - aliceBufferedAssets - 1;
         userDepositAmount = bound(userDepositAmount, minDepositAmount, maxDepositAmount);
 
+        uint256 bufferedAssets = stakingPool.bufferedAssets();
+
         vm.deal(bob, userDepositAmount);
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
         emit IStakingPool.ActiveTresholdReached();
         stakingPool.submit{ value: userDepositAmount }();
 
+        uint256 expectedBufferedAssets = (bufferedAssets + userDepositAmount) % 1 gwei;
+        uint256 expectedDepositAmount = ((bufferedAssets + userDepositAmount) / 1 gwei) * 1 gwei;
+        uint256 expectedTotalDeposits = INITIAL_DEPOSIT_AMOUNT + expectedDepositAmount;
+
         assertTrue(stakingPool.activeTresholdReached());
         assertEq(stakingPool.balanceOf(alice), aliceDepositAmount); // alice is not affected by the first deposit
         assertEq(stakingPool.sharesOf(bob), userDepositAmount);
         assertEq(stakingPool.balanceOf(bob), userDepositAmount);
-        assertEq(stakingPool.bufferedAssets(), 0); // buffered assets are deposited and reset to 0
-        assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT + aliceDepositAmount + userDepositAmount); // total
-            // deposits are updated
+        assertEq(stakingPool.bufferedAssets(), expectedBufferedAssets);
+        assertEq(stakingPool.totalDeposits(), expectedTotalDeposits);
     }
 
     function testFuzz_submit_correctShares(uint256 userDepositAmount) public {

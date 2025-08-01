@@ -201,8 +201,13 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         bufferedAssets = updatedBufferedAssets;
 
         if (_canDeposit()) {
-            _deposit(bufferedAssets);
-            bufferedAssets = 0;
+            // Deposit contract accept only multiple of 1 gwei as deposit amount.
+            uint256 depositAmountInGwei = bufferedAssets / 1 gwei;
+            uint256 depositAmount = depositAmountInGwei * 1 gwei;
+            _deposit(depositAmount);
+
+            // Leave the remaining amount in the buffer.
+            bufferedAssets -= depositAmount;
 
             if (totalDeposits == MAX_EFFECTIVE_BALANCE) {
                 _pause();
