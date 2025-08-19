@@ -29,6 +29,10 @@ abstract contract StBERA is IStBera, IERC20 {
         return 18;
     }
 
+    function totalShares() public view returns (uint256) {
+        return _totalShares;
+    }
+
     function totalSupply() public view virtual override(IERC20, IStBera) returns (uint256) {
         return _getTotalAssets();
     }
