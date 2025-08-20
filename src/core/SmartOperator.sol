@@ -117,8 +117,7 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
 
     /// @inheritdoc ISmartOperator
     function activateBoost() external {
-        // REVIEW address(this) ?
-        BGT.activateBoost(msg.sender, _pubkey);
+        BGT.activateBoost(address(this), _pubkey);
     }
 
     /// @inheritdoc ISmartOperator
@@ -134,8 +133,7 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
 
     /// @inheritdoc ISmartOperator
     function dropBoost() external {
-        // REVIEW address(this) ?
-        BGT.dropBoost(msg.sender, _pubkey);
+        BGT.dropBoost(address(this), _pubkey);
     }
 
     /// @inheritdoc ISmartOperator
