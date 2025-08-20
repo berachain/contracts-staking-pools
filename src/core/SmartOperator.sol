@@ -48,9 +48,6 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
     /// @dev Can set the payout amount for the incentive collector.
     bytes32 public constant INCENTIVE_COLLECTOR_MANAGER_ROLE = keccak256("INCENTIVE_COLLECTOR_MANAGER_ROLE");
 
-    /// @dev Default validator commission set to 5% (500 basis points).
-    uint96 public constant DEFAULT_VAL_COMMISSION = 500; // 5%
-
     /// @dev Maximum protocol fee set to 20% (2000 basis points).
     uint96 public constant MAX_PROTOCOL_FEE = 2000;
 
@@ -95,7 +92,6 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
         _setRoleAdmin(PROTOCOL_FEE_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
 
         _pubkey = pubkey;
-        BERA_CHEF.queueValCommission(_pubkey, DEFAULT_VAL_COMMISSION);
 
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
 
