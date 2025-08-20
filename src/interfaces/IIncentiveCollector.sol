@@ -40,6 +40,8 @@ interface IIncentiveCollector {
     /// @notice Claims incentive tokens by paying the required payout amount.
     /// @dev Transfers all balances of specified ERC20 tokens to the caller and forwards fees to the smart operator
     /// and the remaining payout amount to the staking rewards vault
+    /// @dev This function is NOT implementing slippage protection. Caller has to check that received amounts match the
+    /// minimum expected.
     /// @param tokens Array of ERC20 token addresses to claim balances from.
     /// @custom:throws IncorrectPayoutAmount if msg.value does not match required payout amount.
     /// @custom:throws TransferFailed if transfer to staking rewards vault fails.
