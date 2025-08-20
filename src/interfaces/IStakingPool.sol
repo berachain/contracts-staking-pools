@@ -15,6 +15,8 @@ interface IStakingPool {
 
     // Signature: 0x6cbf06ef
     error StakingPoolAlreadyActivated();
+    // Signature: 0x269ecc71
+    error StakingPoolFullExited();
     // Signature: 0xe1130dba
     error InvalidSender(address sender, address expected);
     // Signature: 0x2c5211c6
@@ -88,5 +90,6 @@ interface IStakingPool {
 
     /// @notice Unpauses deposits.
     /// @dev Admin function.
+    /// @dev Can only be called if the pool is not full exited.
     function unpause() external;
 }

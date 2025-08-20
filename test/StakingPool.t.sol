@@ -293,6 +293,15 @@ contract StakingPoolTest is Base {
         assertFalse(stakingPool.paused());
     }
 
+    function test_unpause_Fail_FullExited() public {
+        // set isFullExited to true
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(uint256(1)));
+        assertEq(stakingPool.isFullExited(), true);
+
+        vm.expectRevert(IStakingPool.StakingPoolFullExited.selector);
+        stakingPool.unpause();
+    }
+
     function test_pause_Fail_NotOwner() public {
         test_activate(); // activate to make sure the staking pool is not paused
 

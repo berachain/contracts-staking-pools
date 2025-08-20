@@ -94,6 +94,9 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
 
     /// @inheritdoc IStakingPool
     function unpause() external onlyOwner {
+        if (isFullExited) {
+            revert StakingPoolFullExited();
+        }
         _unpause();
     }
 
