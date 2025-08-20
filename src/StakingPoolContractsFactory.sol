@@ -42,11 +42,18 @@ contract StakingPoolContractsFactory is
     event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
 
     // ERRORS
+    // Signature: 0xc4142b41
     error OperatorAlreadySet();
+    // Signature: 0xccea9e6f
     error InvalidOperator();
+    // Signature: 0x9be73159
     error InvalidWithdrawalCredentials();
+    // Signature: 0xe6c4247b
     error InvalidAddress();
+    // Signature: 0x29829bdd
     error InvalidFirstDepositAmount();
+    // Signature: 0x7b5d09a5
+    error InvalidInitialDepositAmount();
 
     // STORAGE
     address public accountingOracle;
@@ -167,6 +174,10 @@ contract StakingPoolContractsFactory is
     )
         external
     {
+        if (initialDepositAmount < FIRST_DEPOSIT_AMOUNT) {
+            revert InvalidInitialDepositAmount();
+        }
+
         if (BEACON_DEPOSIT.getOperator(pubkey) != _coreContracts[pubkey].smartOperator) {
             revert InvalidOperator();
         }

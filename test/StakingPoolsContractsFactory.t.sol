@@ -101,6 +101,24 @@ contract StakingPoolsContractsFactoryTest is Base {
         );
     }
 
+    function test_activateStakingPool_InvalidInitialDepositAmount() public {
+        _deployStakingPoolContracts(validatorData.pubkey);
+
+        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(validatorData.withdrawalAddress);
+        uint256 initialDepositAmount = 100 ether;
+
+        vm.expectRevert(StakingPoolContractsFactory.InvalidInitialDepositAmount.selector);
+        stakingPoolContractsFactory.activateStakingPool(
+            validatorData.pubkey,
+            withdrawalCredentials,
+            validatorData.pubkeyProof,
+            validatorData.withdrawalCredentialsProof,
+            validatorData.index,
+            initialDepositAmount,
+            uint64(block.timestamp)
+        );
+    }
+
     function testFuzz_upgradeBeaconImpl(uint8 beaconType) public {
         vm.assume(beaconType <= uint8(type(BeaconType).max));
 
