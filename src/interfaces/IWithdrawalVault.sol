@@ -36,7 +36,7 @@ interface IWithdrawalVault {
     /// @notice Triggers withdrawals from the consensus layer through EIP-7002.
     /// @dev Can only be called by the withdrawal request ERC721 contract.
     /// @param pubkey The validator's public key to withdraw from.
-    /// @param amount The amount to withdraw.
+    /// @param amountInGWei The amount to withdraw in GWei.
     /// @param maxFeeToPay The maximum fee the caller is willing to pay.
     /// @param refundReceiver The address to receive any refunded fees.
     /// @custom:throws InvalidSender if not called by withdrawal request ERC721.
@@ -44,7 +44,7 @@ interface IWithdrawalVault {
     /// @custom:throws InsufficientFee if msg.value is less than maxFeeToPay.
     function triggerWithdrawals(
         bytes memory pubkey,
-        uint256 amount,
+        uint64 amountInGWei,
         uint256 maxFeeToPay,
         address refundReceiver
     )

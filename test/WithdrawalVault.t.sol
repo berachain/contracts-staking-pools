@@ -48,15 +48,18 @@ contract WithdrawalVaultTest is Base {
     function testFuzz_triggerWithdrawals(uint256 withdrawAmount) public {
         uint256 maxFeeToPay = _helper_getWithdrawalFee();
 
+        uint64 amountInGWei = uint64(withdrawAmount / 1 gwei);
+        uint256 amountInWei = uint256(amountInGWei) * 1 gwei;
+
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, withdrawAmount, maxFeeToPay);
+        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, amountInGWei, maxFeeToPay);
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            validatorData.pubkey, withdrawAmount, maxFeeToPay, makeAddr("receiver")
+            validatorData.pubkey, amountInGWei, maxFeeToPay, makeAddr("receiver")
         );
 
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), withdrawAmount);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), amountInWei);
     }
 
     function test_triggerWithdrawals_Multiple() public {
@@ -65,9 +68,9 @@ contract WithdrawalVaultTest is Base {
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, 100 ether, maxFeeToPay);
+        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, 100 gwei, maxFeeToPay);
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            validatorData.pubkey, 100 ether, maxFeeToPay, makeAddr("receiver")
+            validatorData.pubkey, 100 gwei, maxFeeToPay, makeAddr("receiver")
         );
 
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 100 ether);
@@ -76,29 +79,29 @@ contract WithdrawalVaultTest is Base {
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, 200 ether, maxFeeToPay);
+        emit ELWithdrawHelper.ELWithdrawalTriggered(validatorData.pubkey, 200 gwei, maxFeeToPay);
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            validatorData.pubkey, 200 ether, maxFeeToPay, makeAddr("receiver")
+            validatorData.pubkey, 200 gwei, maxFeeToPay, makeAddr("receiver")
         );
 
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 300 ether);
 
         // Third withdrawal - different validator
-        bytes memory pubkey2 = _create96Byte();
+        bytes memory pubkey2 = _create48Byte();
         _deployStakingPoolContracts(pubkey2);
 
         vm.deal(address(_getWithdrawalRequestERC721(pubkey2)), maxFeeToPay);
         vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
         vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(pubkey2, 150 ether, maxFeeToPay);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(pubkey2, 150 ether, maxFeeToPay, makeAddr("receiver"));
+        emit ELWithdrawHelper.ELWithdrawalTriggered(pubkey2, 150 gwei, maxFeeToPay);
+        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(pubkey2, 150 gwei, maxFeeToPay, makeAddr("receiver"));
 
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 150 ether);
     }
 
     function test_triggerWithdrawals_RefundOverpaidFee() public {
         address receiver = makeAddr("receiver");
-        uint256 withdrawAmount = 100 ether;
+        uint64 withdrawAmount = 100 gwei;
         uint256 fee = _helper_getWithdrawalFee();
         uint256 maxFeeToPay = fee + 1;
 
@@ -117,7 +120,7 @@ contract WithdrawalVaultTest is Base {
 
     function test_triggerWithdrawals_Fail_InvalidSender() public {
         address invalidSender = makeAddr("invalidSender");
-        uint256 withdrawAmount = 100 ether;
+        uint64 withdrawAmount = 100 gwei;
         uint256 maxFeeToPay = _helper_getWithdrawalFee();
 
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
@@ -135,7 +138,7 @@ contract WithdrawalVaultTest is Base {
     }
 
     function test_triggerWithdrawals_Fail_OverpaidFee() public {
-        uint256 withdrawAmount = 100 ether;
+        uint64 withdrawAmount = 100 gwei;
         uint256 maxFeeToPay = _helper_getWithdrawalFee();
         mockEIP7002.setWithdrawalFee(maxFeeToPay + 1);
 
@@ -148,7 +151,7 @@ contract WithdrawalVaultTest is Base {
     }
 
     function test_triggerWithdrawals_Fail_InsufficientFee() public {
-        uint256 withdrawAmount = 100 ether;
+        uint64 withdrawAmount = 100 gwei;
         uint256 maxFeeToPay = 100 ether;
 
         vm.deal(address(_getWithdrawalRequestERC721(validatorData.pubkey)), maxFeeToPay);
@@ -162,17 +165,20 @@ contract WithdrawalVaultTest is Base {
     function testFuzz_withdrawWithdrawals(uint256 amount) public {
         testFuzz_triggerWithdrawals(amount);
 
-        vm.deal(address(withdrawalVault), amount);
-        assertEq(address(withdrawalVault).balance, amount);
+        uint64 amountInGWei = uint64(amount / 1 gwei);
+        uint256 amountInWei = uint256(amountInGWei) * 1 gwei;
+
+        vm.deal(address(withdrawalVault), amountInWei);
+        assertEq(address(withdrawalVault).balance, amountInWei);
 
         address receiver = makeAddr("receiver");
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
-        emit IWithdrawalVault.WithdrawalsWithdrawn(amount);
-        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, amount, receiver);
+        emit IWithdrawalVault.WithdrawalsWithdrawn(amountInWei);
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, amountInWei, receiver);
 
         assertEq(address(withdrawalVault).balance, 0);
-        assertEq(address(receiver).balance, amount);
+        assertEq(address(receiver).balance, amountInWei);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 0);
     }
 
@@ -203,7 +209,7 @@ contract WithdrawalVaultTest is Base {
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 0);
 
         // Third withdrawal - different validator
-        bytes memory pubkey2 = _create96Byte();
+        bytes memory pubkey2 = _create48Byte();
 
         vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
         vm.expectEmit(true, true, true, true);

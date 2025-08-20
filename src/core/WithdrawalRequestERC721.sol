@@ -90,16 +90,16 @@ contract WithdrawalRequestERC721 is
     // IWithdrawalRequestERC721
 
     /// @inheritdoc IWithdrawalRequestERC721
-    function requestWithdrawal(uint256 assets, uint256 maxFeeToPay) external payable nonReentrant {
+    function requestWithdrawal(uint64 assetsInGWei, uint256 maxFeeToPay) external payable {
         // Zero means full exit.
-        if (assets == 0) {
+        if (assetsInGWei == 0) {
             revert InvalidAmount();
         }
 
-        uint256 amountToWithdraw = assets;
+        uint256 amountInWei = uint256(assetsInGWei) * 1 gwei;
 
         // Notify staking pool of withdrawal request and get shares amount
-        (uint256 shares, bool isFullExitWithdraw) = _stakingPool.notifyWithdrawalRequest(msg.sender, assets);
+        (uint256 shares, bool isFullExitWithdraw) = _stakingPool.notifyWithdrawalRequest(msg.sender, amountInWei);
 
         // Only trigger withdrawals if pool hasn't fully exited
         if (!_isFullExited) {
@@ -107,16 +107,16 @@ contract WithdrawalRequestERC721 is
             if (isFullExitWithdraw) {
                 _isFullExited = true;
                 _fullExitBlockActivation = block.number + CL_ACTIVE_SET_EXCLUSION_DELAY;
-                amountToWithdraw = 0;
+                assetsInGWei = 0;
             }
 
             // Trigger withdrawal from vault
-            _withdrawalVault.triggerWithdrawals{ value: msg.value }(_pubkey, amountToWithdraw, maxFeeToPay, msg.sender);
+            _withdrawalVault.triggerWithdrawals{ value: msg.value }(_pubkey, assetsInGWei, maxFeeToPay, msg.sender);
         }
 
-        uint256 requestId = _mintWithdrawalRequest(assets, shares);
+        uint256 requestId = _mintWithdrawalRequest(amountInWei, shares);
 
-        emit WithdrawalRequested(msg.sender, assets, shares, requestId, isFullExitWithdraw);
+        emit WithdrawalRequested(msg.sender, amountInWei, shares, requestId, isFullExitWithdraw);
     }
 
     /// @inheritdoc IWithdrawalRequestERC721

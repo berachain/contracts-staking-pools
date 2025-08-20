@@ -8,9 +8,9 @@ abstract contract ELWithdrawHelper {
 
     /// @notice Emitted when a withdrawal is triggered.
     /// @param pubkey The public key of the validator to withdraw from.
-    /// @param assets The amount of assets to withdraw.
+    /// @param amount The amount of assets to withdraw in gwei.
     /// @param fee The fee paid for the withdrawal.
-    event ELWithdrawalTriggered(bytes pubkey, uint256 assets, uint256 fee);
+    event ELWithdrawalTriggered(bytes pubkey, uint64 amount, uint256 fee);
 
     /// @notice Emitted when fee passed for withdrawal exceeds necessary amount.
     /// @param receiver The wallet receiving the refund.
@@ -49,12 +49,13 @@ abstract contract ELWithdrawHelper {
         return fee;
     }
 
-    function _triggerEligibleWithdrawal(bytes memory pubkey, uint256 assets, uint256 fee) internal {
-        bytes memory rawCallData = abi.encodePacked(pubkey, assets);
+    function _triggerEligibleWithdrawal(bytes memory pubkey, uint64 amount, uint256 fee) internal {
+        bytes memory rawCallData = abi.encodePacked(pubkey, amount);
+
         (bool success,) = EIP_7002.call{ value: fee }(rawCallData);
         if (!success) revert ELWithdrawalTriggerFailed();
 
-        emit ELWithdrawalTriggered(pubkey, assets, fee);
+        emit ELWithdrawalTriggered(pubkey, amount, fee);
     }
 
     function _refundOverpaidFee(uint256 fee, address receiver) internal {

@@ -51,10 +51,10 @@ interface IWithdrawalRequestERC721 {
 
     /// @notice Requests a withdrawal of assets from the staking pool.
     /// @dev Creates an NFT representing the withdrawal that will be necessary to finalize the request.
-    /// @param assets The amount of BERA to withdraw.
+    /// @param assetsInGWei The amount of BERA to withdraw in GWei.
     /// @param maxFeeToPay The maximum fee the user is willing to pay for the withdrawal (EIP-7002).
-    /// @custom:throws InvalidAmount if assets is 0.
-    function requestWithdrawal(uint256 assets, uint256 maxFeeToPay) external payable;
+    /// @custom:throws InvalidAmount if assetsInGWei is 0.
+    function requestWithdrawal(uint64 assetsInGWei, uint256 maxFeeToPay) external payable;
 
     /// @notice Finalizes a withdrawal request.
     /// @param requestId The ID of the withdrawal request to finalize.

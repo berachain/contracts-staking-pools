@@ -49,7 +49,7 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
     /// @inheritdoc IWithdrawalVault
     function triggerWithdrawals(
         bytes memory pubkey,
-        uint256 amount,
+        uint64 amountInGWei,
         uint256 maxFeeToPay,
         address refundReceiver
     )
@@ -68,9 +68,9 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
             revert InsufficientFee();
         }
 
-        allocatedWithdrawalsAmount[pubkey] += amount;
+        allocatedWithdrawalsAmount[pubkey] += uint256(amountInGWei) * 1 gwei;
 
-        _triggerEligibleWithdrawal(pubkey, amount, fee);
+        _triggerEligibleWithdrawal(pubkey, amountInGWei, fee);
         _refundOverpaidFee(fee, refundReceiver);
     }
 

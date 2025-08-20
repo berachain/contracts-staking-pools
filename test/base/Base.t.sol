@@ -216,4 +216,8 @@ abstract contract Base is Test, Create2Deployer {
     function _create96Byte() internal pure returns (bytes memory) {
         return abi.encodePacked(bytes32("32"), bytes32("32"), bytes32("32"));
     }
+
+    function _create48Byte() internal pure returns (bytes memory) {
+        return abi.encodePacked(bytes32("32"), bytes16("16"));
+    }
 }

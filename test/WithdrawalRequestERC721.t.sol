@@ -19,29 +19,36 @@ contract WithdrawalRequestERC721Test is Base {
         withdrawalRequestERC721 = _getWithdrawalRequestERC721(validatorData.pubkey);
     }
 
-    function test_requestWithdrawal() public {
+    function testFuzz_requestWithdrawal(uint64 withdrawAmount) public {
+        withdrawAmount = uint64(_bound(withdrawAmount, 1e9, 100_000_000 gwei));
+
+        uint256 amountInWei = uint256(withdrawAmount) * 1e9;
         vm.mockCall(
             address(_getStakingPool(validatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
-            abi.encode(100 ether, false)
+            abi.encode(amountInWei, false)
         );
 
         vm.deal(alice, 1);
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
-        emit IWithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, false);
-        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
+        emit IWithdrawalRequestERC721.WithdrawalRequested(alice, amountInWei, amountInWei, 0, false);
+        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(withdrawAmount, 1);
 
         assertEq(withdrawalRequestERC721.balanceOf(alice), 1);
         assertEq(withdrawalRequestERC721.ownerOf(0), alice);
 
         (uint256 requiredStBera, uint256 burnedShares, address user, uint256 requestBlock, bool finalized) =
             withdrawalRequestERC721.withdrawalRequests(0);
-        assertEq(requiredStBera, 100 ether);
-        assertEq(burnedShares, 100 ether);
+        assertEq(requiredStBera, amountInWei);
+        assertEq(burnedShares, amountInWei);
         assertEq(user, alice);
         assertEq(requestBlock, block.number);
         assertEq(finalized, false);
+    }
+
+    function test_requestWithdrawal() public {
+        testFuzz_requestWithdrawal(100 gwei);
     }
 
     function test_requestWithdrawal_FullExit() public {
@@ -55,7 +62,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.prank(alice);
         vm.expectEmit(true, true, true, true);
         emit IWithdrawalRequestERC721.WithdrawalRequested(alice, 100 ether, 100 ether, 0, true);
-        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
+        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 gwei, 1);
 
         (uint256 requiredStBera, uint256 burnedShares, address user, uint256 requestBlock, bool finalized) =
             withdrawalRequestERC721.withdrawalRequests(0);
@@ -68,6 +75,7 @@ contract WithdrawalRequestERC721Test is Base {
 
     function test_requestWithdrawal_Fail_InvalidAmount() public {
         vm.deal(alice, 1);
+
         vm.prank(alice);
         vm.expectRevert(IWithdrawalRequestERC721.InvalidAmount.selector);
         withdrawalRequestERC721.requestWithdrawal{ value: 1 }(0, 1);
@@ -135,10 +143,10 @@ contract WithdrawalRequestERC721Test is Base {
 
         vm.deal(alice, 2);
         vm.prank(alice);
-        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
+        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 gwei, 1);
 
         vm.prank(alice);
-        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 ether, 1);
+        withdrawalRequestERC721.requestWithdrawal{ value: 1 }(100 gwei, 1);
 
         vm.roll(vm.getBlockNumber() + withdrawalRequestERC721.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY());
         vm.deal(address(withdrawalVault), 200 ether);
