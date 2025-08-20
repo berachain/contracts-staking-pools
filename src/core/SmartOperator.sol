@@ -14,6 +14,7 @@ import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
 contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeable, PausableUpgradeable {
     // CONSTANTS
@@ -230,8 +231,7 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
             revert InvalidAmount();
         }
 
-        (bool success,) = receiver.call{ value: amount }("");
-        if (!success) revert TransferFailed();
+        SafeTransferLib.safeTransferETH(receiver, amount);
 
         emit ProtocolFeeCollected(amount, receiver);
     }

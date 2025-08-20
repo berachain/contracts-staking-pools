@@ -12,11 +12,13 @@ import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 contract WithdrawalRequestERC721 is
     Initializable,
     ERC721EnumerableUpgradeable,
     AccessControlUpgradeable,
+    ReentrancyGuardUpgradeable,
     IWithdrawalRequestERC721
 {
     // CONSTANTS
@@ -46,6 +48,7 @@ contract WithdrawalRequestERC721 is
         __ERC721_init("Berachain Staking Pool Withdrawal Request", "BSPWR");
         __ERC721Enumerable_init();
         __AccessControl_init();
+        __ReentrancyGuard_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
 
@@ -87,7 +90,7 @@ contract WithdrawalRequestERC721 is
     // IWithdrawalRequestERC721
 
     /// @inheritdoc IWithdrawalRequestERC721
-    function requestWithdrawal(uint256 assets, uint256 maxFeeToPay) external payable {
+    function requestWithdrawal(uint256 assets, uint256 maxFeeToPay) external payable nonReentrant {
         // Zero means full exit.
         if (assets == 0) {
             revert InvalidAmount();
@@ -117,12 +120,12 @@ contract WithdrawalRequestERC721 is
     }
 
     /// @inheritdoc IWithdrawalRequestERC721
-    function finalizeWithdrawalRequest(uint256 requestId) external {
+    function finalizeWithdrawalRequest(uint256 requestId) external nonReentrant {
         _finalizeWithdrawalRequest(requestId);
     }
 
     /// @inheritdoc IWithdrawalRequestERC721
-    function finalizeWithdrawalRequests(uint256[] calldata requestIds) external {
+    function finalizeWithdrawalRequests(uint256[] calldata requestIds) external nonReentrant {
         for (uint256 i = 0; i < requestIds.length; i++) {
             _finalizeWithdrawalRequest(requestIds[i]);
         }

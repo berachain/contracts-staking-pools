@@ -6,6 +6,8 @@ import { WithdrawalVault, IWithdrawalVault } from "src/WithdrawalVault.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
+import { console2 } from "forge-std/console2.sol";
 
 contract WithdrawalVaultTest is Base {
     function setUp() public override {
@@ -226,12 +228,12 @@ contract WithdrawalVaultTest is Base {
     }
 
     function test_withdrawWithdrawals_Fail_InsufficientBalance() public {
-        vm.deal(address(withdrawalVault), 1 ether);
+        testFuzz_triggerWithdrawals(1 ether);
 
         address receiver = makeAddr("receiver");
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
-        vm.expectRevert(abi.encodeWithSelector(IWithdrawalVault.WithdrawalFailed.selector));
-        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 2 ether, receiver);
+        vm.expectRevert(abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector));
+        withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 1 ether, receiver);
     }
 
     function test_recoverERC20(uint256 amount) public {

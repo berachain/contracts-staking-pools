@@ -8,6 +8,7 @@ import { StBERA } from "src/base/StBERA.sol";
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
 interface IStakingRewardsVault {
     function withdrawRewards(uint256 amount) external;
@@ -139,10 +140,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
 
         if (!activeTresholdReached) {
             bufferedAssets -= assets;
-            (bool success,) = _withdrawalVault.call{ value: assets }("");
-            if (!success) {
-                revert TransferFailed();
-            }
+            SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
             return (amountOfSharesToBurn, isFullExited);
         }
 
@@ -211,10 +209,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         }
 
         if (refundAmount > 0) {
-            (bool success,) = msg.sender.call{ value: refundAmount }("");
-            if (!success) {
-                revert TransferFailed();
-            }
+            SafeTransferLib.safeTransferETH(msg.sender, refundAmount);
         }
     }
 
@@ -319,10 +314,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
 
         // Transfer buffered assets to the withdrawal vault
         if (bufferedAssets > 0) {
-            (bool success,) = _withdrawalVault.call{ value: bufferedAssets }("");
-            if (!success) {
-                revert TransferFailed();
-            }
+            SafeTransferLib.safeTransferETH(_withdrawalVault, bufferedAssets);
             bufferedAssets = 0;
         }
 
@@ -330,10 +322,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         if (address(_stakingRewardsVault).balance > 0) {
             uint256 rewardsToWithdraw = address(_stakingRewardsVault).balance;
             IStakingRewardsVault(_stakingRewardsVault).withdrawRewards(rewardsToWithdraw);
-            (bool success,) = _withdrawalVault.call{ value: rewardsToWithdraw }("");
-            if (!success) {
-                revert TransferFailed();
-            }
+            SafeTransferLib.safeTransferETH(_withdrawalVault, rewardsToWithdraw);
         }
 
         isFullExited = true;

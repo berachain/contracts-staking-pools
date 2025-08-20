@@ -8,6 +8,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
 /**
  * @title A vault for temporary storage of withdrawals
@@ -67,8 +68,9 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
             revert InsufficientFee();
         }
 
-        _triggerEligibleWithdrawal(pubkey, amount, fee);
         allocatedWithdrawalsAmount[pubkey] += amount;
+
+        _triggerEligibleWithdrawal(pubkey, amount, fee);
         _refundOverpaidFee(fee, refundReceiver);
     }
 
@@ -77,10 +79,9 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
         if (!_whitelistedWithdrawalRequestERC721[msg.sender]) {
             revert InvalidSender();
         }
-        (bool success,) = receiver.call{ value: amount }("");
-        if (!success) revert WithdrawalFailed();
 
         allocatedWithdrawalsAmount[pubkey] -= amount;
+        SafeTransferLib.safeTransferETH(receiver, amount);
 
         emit WithdrawalsWithdrawn(amount);
     }
