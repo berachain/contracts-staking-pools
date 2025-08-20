@@ -135,22 +135,26 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     }
 
     /// @inheritdoc IStakingPool
-    function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool) {
+    function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool, bool) {
         _validateSender(_withdrawalRequestERC721);
 
         uint256 amountOfSharesToBurn = getSharesByAsset(assets);
         _burnShares(user, amountOfSharesToBurn);
 
-        if (!activeTresholdReached) {
-            bufferedAssets -= assets;
+        // Short circuit withdrawal request if buffered assets are enough to cover the request and active treshold is
+        // not reached.
+        if (!activeTresholdReached && (bufferedAssets >= assets)) {
             SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
-            return (amountOfSharesToBurn, isFullExited);
+            bufferedAssets -= assets;
+            return (amountOfSharesToBurn, isFullExited, true);
         }
 
+        // If short circuit is not triggered, check if withdrawal is allowed
         if (block.number < _validatorActivationBlock + ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS) {
             revert WithdrawalNotAllowed();
         }
 
+        // If pool is not full exited, update total deposits and trigger full exit if necessary
         if (!isFullExited) {
             totalDeposits -= assets;
             if (totalDeposits < MIN_EFFECTIVE_BALANCE) {
@@ -160,7 +164,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
             _frozenTotalAssets -= assets;
         }
 
-        return (amountOfSharesToBurn, isFullExited);
+        return (amountOfSharesToBurn, isFullExited, false);
     }
 
     /// @inheritdoc IStakingPool

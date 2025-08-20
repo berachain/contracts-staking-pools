@@ -57,6 +57,7 @@ interface IStakingPool {
     /// @param assets The amount of BERA to withdraw.
     /// @return sharesToBurn The amount of shares that were burned.
     /// @return isFullExited Whether the pool has fully exited.
+    /// @return isShortCircuit Whether the withdrawal request is short-circuited.
     /// @custom:throws InvalidSender if not called by withdrawalRequestERC721.
     /// @custom:throws WithdrawalNotAllowed if withdrawal cooldown period has not elapsed.
     /// @custom:throws TransferFailed if transfer to withdrawal vault fails.
@@ -65,7 +66,7 @@ interface IStakingPool {
         uint256 assets
     )
         external
-        returns (uint256 sharesToBurn, bool isFullExited);
+        returns (uint256 sharesToBurn, bool isFullExited, bool isShortCircuit);
 
     /// @notice Updates the total deposits of the staking pool.
     /// @dev Meant to be called by the accounting oracle to align total deposits with CL data.

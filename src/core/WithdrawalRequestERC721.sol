@@ -12,6 +12,7 @@ import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 contract WithdrawalRequestERC721 is
@@ -99,19 +100,24 @@ contract WithdrawalRequestERC721 is
         uint256 amountInWei = uint256(assetsInGWei) * 1 gwei;
 
         // Notify staking pool of withdrawal request and get shares amount
-        (uint256 shares, bool isFullExitWithdraw) = _stakingPool.notifyWithdrawalRequest(msg.sender, amountInWei);
+        (uint256 shares, bool isFullExitWithdraw, bool isShortCircuit) =
+            _stakingPool.notifyWithdrawalRequest(msg.sender, amountInWei);
 
-        // Only trigger withdrawals if pool hasn't fully exited
-        if (!_isFullExited) {
+        // Only trigger withdrawals if pool hasn't fully exited and short circuit is not triggered
+        if (!_isFullExited && !isShortCircuit) {
             // For full exit withdrawals, set amount to 0 and mark as exited
             if (isFullExitWithdraw) {
                 _isFullExited = true;
                 _fullExitBlockActivation = block.number + CL_ACTIVE_SET_EXCLUSION_DELAY;
                 assetsInGWei = 0;
             }
-
             // Trigger withdrawal from vault
             _withdrawalVault.triggerWithdrawals{ value: msg.value }(_pubkey, assetsInGWei, maxFeeToPay, msg.sender);
+        } else {
+            // If the pool has fully exited or short circuit is triggered, refund the fee if any
+            if (msg.value > 0) {
+                SafeTransferLib.safeTransferETH(msg.sender, msg.value);
+            }
         }
 
         _withdrawalVault.allocateWithdrawals(_pubkey, amountInWei);

@@ -26,7 +26,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.mockCall(
             address(_getStakingPool(validatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
-            abi.encode(amountInWei, false)
+            abi.encode(amountInWei, false, false)
         );
 
         vm.deal(alice, 1);
@@ -55,7 +55,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.mockCall(
             address(_getStakingPool(validatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
-            abi.encode(100 ether, true)
+            abi.encode(100 ether, true, false)
         );
 
         vm.deal(alice, 1);
@@ -138,7 +138,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.mockCall(
             address(_getStakingPool(validatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
-            abi.encode(100 ether, false)
+            abi.encode(100 ether, false, false)
         );
 
         vm.deal(alice, 2);

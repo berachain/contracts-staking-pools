@@ -218,9 +218,10 @@ contract StakingPoolTest is Base {
         assertFalse(stakingPool.activeTresholdReached());
 
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
-        (uint256 amountOfSharesToBurn, bool isFullExited) =
+        (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
             stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
 
+        assertTrue(isShortCircuit);
         assertEq(amountOfSharesToBurn, withdrawalAmount);
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertEq(stakingPool.bufferedAssets(), submittedAmount - withdrawalAmount);
@@ -242,8 +243,10 @@ contract StakingPoolTest is Base {
         vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
 
         vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
-        (uint256 amountOfSharesToBurn, bool isFullExited) = stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
+        (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
+            stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
 
+        assertFalse(isShortCircuit);
         assertEq(amountOfSharesToBurn, bobDepositAmount);
         assertEq(stakingPool.bufferedAssets(), 0);
         assertFalse(isFullExited);
