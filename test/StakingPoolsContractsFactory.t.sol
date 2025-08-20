@@ -96,7 +96,8 @@ contract StakingPoolsContractsFactoryTest is Base {
             validatorData.pubkeyProof,
             validatorData.withdrawalCredentialsProof,
             validatorData.index,
-            initialDepositAmount
+            initialDepositAmount,
+            uint64(block.timestamp)
         );
     }
 

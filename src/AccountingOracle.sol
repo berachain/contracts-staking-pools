@@ -17,7 +17,14 @@ interface IStakingPool {
 }
 
 contract AccountingOracle is BeaconRootsHelper, AccessControlUpgradeable, UUPSUpgradeable {
+    uint256 public constant MAX_TIMESTAMP_AGE = 10 minutes;
+
+    // ERRORS
+
+    // Signature: 0xd6234725
     error NotImplemented();
+    // Signature: 0xb7d09497
+    error InvalidTimestamp();
 
     bytes32 public constant FEEDER_ROLE = keccak256("FEEDER_ROLE");
 
@@ -42,12 +49,17 @@ contract AccountingOracle is BeaconRootsHelper, AccessControlUpgradeable, UUPSUp
         uint64 balance,
         bytes32 balancesLeaf,
         bytes32[] calldata balanceProofs,
-        uint64 validatorIndex
+        uint64 validatorIndex,
+        uint64 timestamp
     )
         external
         onlyRole(FEEDER_ROLE)
     {
-        bytes32 beaconBlockRoot = _getBeaconBlockRoot(uint64(block.timestamp));
+        if (timestamp > block.timestamp || block.timestamp - timestamp > MAX_TIMESTAMP_AGE) {
+            revert InvalidTimestamp();
+        }
+
+        bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
         _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProofs, validatorIndex);
 
         (, address stakingPool,,,) = _factory.getCoreContracts(pubkey);

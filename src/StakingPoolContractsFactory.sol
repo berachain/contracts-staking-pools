@@ -161,7 +161,8 @@ contract StakingPoolContractsFactory is
         bytes32[] calldata pubkeyProof,
         bytes32[] calldata withdrawalCredentialsProof,
         uint64 validatorIndex,
-        uint256 initialDepositAmount
+        uint256 initialDepositAmount,
+        uint64 timestamp
     )
         external
     {
@@ -169,12 +170,9 @@ contract StakingPoolContractsFactory is
             revert InvalidOperator();
         }
 
-        bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
-        if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
-            revert InvalidWithdrawalCredentials();
-        }
+        _validateWithdrawalCredentials(withdrawalCredentials);
 
-        bytes32 beaconBlockRoot = _getBeaconBlockRoot(uint64(block.timestamp));
+        bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
         _verifyValidatorPubkeyInBeaconBlock(beaconBlockRoot, pubkeyProof, pubkey, validatorIndex);
         _verifyValidatorWithdrawalCredentialsInBeaconBlock(
             beaconBlockRoot, withdrawalCredentialsProof, withdrawalCredentials, validatorIndex
@@ -280,13 +278,17 @@ contract StakingPoolContractsFactory is
             revert OperatorAlreadySet();
         }
 
-        bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
-        if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
-            revert InvalidWithdrawalCredentials();
-        }
+        _validateWithdrawalCredentials(withdrawalCredentials);
 
         if (msg.value != FIRST_DEPOSIT_AMOUNT) {
             revert InvalidFirstDepositAmount();
+        }
+    }
+
+    function _validateWithdrawalCredentials(bytes memory withdrawalCredentials) internal view {
+        bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
+        if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
+            revert InvalidWithdrawalCredentials();
         }
     }
 
