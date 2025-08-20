@@ -163,7 +163,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     }
 
     /// @inheritdoc IStakingPool
-    function updateTotalDeposits(uint256 newTotalDeposits) external {
+    function updateTotalDeposits(uint256 newTotalDeposits) external whenNotPaused {
         _validateSender(_accountingOracle);
         totalDeposits = newTotalDeposits;
         emit TotalDepositsUpdated(newTotalDeposits);
