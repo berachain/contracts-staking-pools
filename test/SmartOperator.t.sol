@@ -273,6 +273,6 @@ contract SmartOperatorTest is Base {
         assertEq(address(receiver).balance, 190 ether);
         assertEq(address(smartOperator).balance, 10 ether);
 
-        assertEq(smartOperator.baseRateChargedFees(), 10 ether);
+        assertEq(smartOperator.baseRateChargedFees(), 0);
     }
 }

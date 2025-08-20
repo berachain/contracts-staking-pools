@@ -145,6 +145,13 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
             SafeTransferLib.safeTransferETH(receiver, balance - baseRateChargedFees);
 
             emit BGTRedeemed(receiver, balance - baseRateChargedFees, baseRateChargedFees);
+
+            // Reset base rate charged fees and already charged amount
+            // Successful redeem (balance > 0) represents a terminal state for the staking pool and triggered only
+            // after a full exit.
+            // Resetting state here is safe since any BGT donated/received after this point won't affect accounting.
+            baseRateChargedFees = 0;
+            _baseRateAlreadyCharged = 0;
         }
     }
 
