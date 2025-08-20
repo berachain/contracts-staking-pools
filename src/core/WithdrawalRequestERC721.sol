@@ -114,6 +114,7 @@ contract WithdrawalRequestERC721 is
             _withdrawalVault.triggerWithdrawals{ value: msg.value }(_pubkey, assetsInGWei, maxFeeToPay, msg.sender);
         }
 
+        _withdrawalVault.allocateWithdrawals(_pubkey, amountInWei);
         uint256 requestId = _mintWithdrawalRequest(amountInWei, shares);
 
         emit WithdrawalRequested(msg.sender, amountInWei, shares, requestId, isFullExitWithdraw);

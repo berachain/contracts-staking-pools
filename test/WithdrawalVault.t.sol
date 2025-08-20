@@ -59,6 +59,9 @@ contract WithdrawalVaultTest is Base {
             validatorData.pubkey, amountInGWei, maxFeeToPay, makeAddr("receiver")
         );
 
+        address sender = address(_getWithdrawalRequestERC721(validatorData.pubkey));
+        _helper_allocateWithdrawals(sender, validatorData.pubkey, amountInWei);
+
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), amountInWei);
     }
 
@@ -73,6 +76,9 @@ contract WithdrawalVaultTest is Base {
             validatorData.pubkey, 100 gwei, maxFeeToPay, makeAddr("receiver")
         );
 
+        address sender = address(_getWithdrawalRequestERC721(validatorData.pubkey));
+        _helper_allocateWithdrawals(sender, validatorData.pubkey, 100 ether);
+
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 100 ether);
 
         // Second withdrawal - Same validator
@@ -83,6 +89,9 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
             validatorData.pubkey, 200 gwei, maxFeeToPay, makeAddr("receiver")
         );
+
+        sender = address(_getWithdrawalRequestERC721(validatorData.pubkey));
+        _helper_allocateWithdrawals(sender, validatorData.pubkey, 200 ether);
 
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 300 ether);
 
@@ -95,6 +104,9 @@ contract WithdrawalVaultTest is Base {
         vm.expectEmit(true, true, true, true);
         emit ELWithdrawHelper.ELWithdrawalTriggered(pubkey2, 150 gwei, maxFeeToPay);
         withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(pubkey2, 150 gwei, maxFeeToPay, makeAddr("receiver"));
+
+        sender = address(_getWithdrawalRequestERC721(pubkey2));
+        _helper_allocateWithdrawals(sender, pubkey2, 150 ether);
 
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 150 ether);
     }
@@ -242,6 +254,39 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.withdrawWithdrawals(validatorData.pubkey, 1 ether, receiver);
     }
 
+    function test_allocateWithdrawals() public {
+        address sender = address(_getWithdrawalRequestERC721(validatorData.pubkey));
+        _helper_allocateWithdrawals(sender, validatorData.pubkey, 100 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 100 ether);
+    }
+
+    function test_allocateWithdrawals_MultipleValidators() public {
+        bytes memory pubkey2 = _create96Byte();
+
+        _deployStakingPoolContracts(pubkey2);
+
+        address sender1 = address(_getWithdrawalRequestERC721(validatorData.pubkey));
+        address sender2 = address(_getWithdrawalRequestERC721(pubkey2));
+
+        _helper_allocateWithdrawals(sender1, validatorData.pubkey, 100 ether);
+        _helper_allocateWithdrawals(sender2, pubkey2, 200 ether);
+
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(validatorData.pubkey), 100 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 200 ether);
+    }
+
+    function test_allocateWithdrawals_Fail_InvalidSender() public {
+        address invalidSender = makeAddr("invalidSender");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IWithdrawalVault.InvalidSender.selector,
+                invalidSender,
+                address(_getWithdrawalRequestERC721(validatorData.pubkey))
+            )
+        );
+        _helper_allocateWithdrawals(invalidSender, validatorData.pubkey, 100 ether);
+    }
+
     function test_recoverERC20(uint256 amount) public {
         address receiver = makeAddr("receiver");
         MockERC20 mockERC20 = new MockERC20("Mocked Token", "MCK");
@@ -272,6 +317,11 @@ contract WithdrawalVaultTest is Base {
             )
         );
         withdrawalVault.recoverERC20(address(mockERC20), receiver, 100 ether);
+    }
+
+    function _helper_allocateWithdrawals(address sender, bytes memory pubkey, uint256 amount) internal {
+        vm.prank(sender);
+        withdrawalVault.allocateWithdrawals(pubkey, amount);
     }
 
     function _helper_getWithdrawalFee() internal view returns (uint256) {

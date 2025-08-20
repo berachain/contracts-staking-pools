@@ -60,6 +60,13 @@ interface IWithdrawalVault {
     /// @custom:throws WithdrawalFailed if the transfer to receiver fails.
     function withdrawWithdrawals(bytes memory pubkey, uint256 amount, address receiver) external;
 
+    /// @notice Allocates funds to a validator.
+    /// @dev Can only be called by the withdrawal request ERC721.
+    /// @param pubkey The validator's public key to allocate funds to.
+    /// @param amount The amount of funds to allocate.
+    /// @custom:throws InvalidSender if not called by withdrawal request ERC721.
+    function allocateWithdrawals(bytes memory pubkey, uint256 amount) external;
+
     /// @notice Recovers ERC20 tokens accidentally sent to the contract.
     /// @dev Can only be called by DEFAULT_ADMIN_ROLE.
     /// @param token The address of the ERC20 token to recover.

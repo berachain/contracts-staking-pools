@@ -109,6 +109,7 @@ contract StakingPoolContractsFactory is
 
         CoreContracts memory coreContracts =
             _deployAndInizializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
+
         IWithdrawalVault(withdrawalVault).whitelistWithdrawalRequestERC721(coreContracts.withdrawalRequestERC721);
 
         _performFirstDeposit(

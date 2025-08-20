@@ -68,8 +68,6 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
             revert InsufficientFee();
         }
 
-        allocatedWithdrawalsAmount[pubkey] += uint256(amountInGWei) * 1 gwei;
-
         _triggerEligibleWithdrawal(pubkey, amountInGWei, fee);
         _refundOverpaidFee(fee, refundReceiver);
     }
@@ -84,6 +82,15 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
         SafeTransferLib.safeTransferETH(receiver, amount);
 
         emit WithdrawalsWithdrawn(amount);
+    }
+
+    /// @inheritdoc IWithdrawalVault
+    function allocateWithdrawals(bytes memory pubkey, uint256 amount) external {
+        if (!_whitelistedWithdrawalRequestERC721[msg.sender]) {
+            revert InvalidSender();
+        }
+
+        allocatedWithdrawalsAmount[pubkey] += amount;
     }
 
     /// @inheritdoc IWithdrawalVault
