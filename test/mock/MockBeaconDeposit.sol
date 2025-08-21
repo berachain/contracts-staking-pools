@@ -4,8 +4,15 @@ pragma solidity ^0.8.30;
 contract MockBeaconDeposit {
     event Deposit(bytes pubkey, bytes credentials, bytes signature, address operator);
 
+    error InvalidPubKeyLength();
+    error InvalidCredentialsLength();
+    error InvalidSignatureLength();
     error DepositNotMultipleOfGwei();
     error DepositValueTooHigh();
+
+    uint8 internal constant PUBLIC_KEY_LENGTH = 48;
+    uint8 internal constant SIGNATURE_LENGTH = 96;
+    uint8 internal constant CREDENTIALS_LENGTH = 32;
 
     mapping(bytes => address) public pubkeyToOperator;
 
@@ -18,6 +25,18 @@ contract MockBeaconDeposit {
         public
         payable
     {
+        if (pubkey.length != PUBLIC_KEY_LENGTH) {
+            revert InvalidPubKeyLength();
+        }
+
+        if (credentials.length != CREDENTIALS_LENGTH) {
+            revert InvalidCredentialsLength();
+        }
+
+        if (signature.length != SIGNATURE_LENGTH) {
+            revert InvalidSignatureLength();
+        }
+
         if (operator != address(0)) {
             setOperator(pubkey, operator);
         }

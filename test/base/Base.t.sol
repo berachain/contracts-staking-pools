@@ -134,6 +134,7 @@ abstract contract Base is Test, Create2Deployer {
 
     function _deployStakingPoolContracts(bytes memory pubkey) internal {
         vm.deal(address(this), type(uint256).max);
+        bytes memory dummySignature = _create96Byte();
 
         bytes memory withdrawalCredentials = _withdrawalAddressToCredentials(address(withdrawalVault));
         (
@@ -143,7 +144,7 @@ abstract contract Base is Test, Create2Deployer {
             address withdrawalRequestERC721,
             address incentiveCollector
         ) = stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
-            pubkey, withdrawalCredentials, _create96Byte(), address(this), address(this)
+            pubkey, withdrawalCredentials, dummySignature, address(this), address(this)
         );
 
         assertEq(smartOperator, stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator);

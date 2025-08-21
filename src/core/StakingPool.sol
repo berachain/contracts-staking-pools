@@ -236,7 +236,10 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
 
     /// @dev Deposits the given amount to CL.
     function _deposit(uint256 amount) internal {
-        BEACON_DEPOSIT.deposit{ value: amount }(_pubkey, bytes(""), bytes(""), address(0));
+        bytes memory _withdrawalCredentials = abi.encodePacked(bytes1(0x01), bytes11(0x0), _withdrawalVault);
+        bytes memory _emptySignature = abi.encodePacked(bytes32(0), bytes32(0), bytes32(0));
+
+        BEACON_DEPOSIT.deposit{ value: amount }(_pubkey, _withdrawalCredentials, _emptySignature, address(0));
         totalDeposits += amount;
     }
 
