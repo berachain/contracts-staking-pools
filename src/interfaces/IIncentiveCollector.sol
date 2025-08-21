@@ -34,6 +34,8 @@ interface IIncentiveCollector {
     error IncorrectPayoutAmount();
     // Signature: 0x90b8ec18
     error TransferFailed();
+    // Signature: 0xb9bf4d31
+    error NodeIsFullExited();
 
     // FUNCTIONS
 
@@ -51,4 +53,10 @@ interface IIncentiveCollector {
     /// @dev Admin function.
     /// @param _payoutAmount The new payout amount in native tokens.
     function setPayoutAmount(uint256 _payoutAmount) external;
+
+    /// @notice Emergency function to recover ERC20 tokens from the incentive collector.
+    /// @dev Callable only by the admin.
+    /// @param tokens Array of ERC20 token addresses to recover.
+    /// @param receiver The address to transfer the tokens to.
+    function recoverERC20(address[] calldata tokens, address receiver) external;
 }

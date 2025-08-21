@@ -164,4 +164,34 @@ contract IncentiveCollectorTest is Base {
         );
         incentiveCollector.claim{ value: incorrectPayingAmount }(incentiveTokens);
     }
+
+    function test_recoverERC20() public {
+        address[] memory tokens = new address[](incentiveTokens.length);
+        for (uint256 i = 0; i < incentiveTokens.length; i++) {
+            tokens[i] = incentiveTokens[i];
+        }
+
+        incentiveCollector.recoverERC20(tokens, address(this));
+
+        for (uint256 i = 0; i < incentiveTokens.length; i++) {
+            assertEq(IERC20(incentiveTokens[i]).balanceOf(address(this)), 100 ether);
+        }
+    }
+
+    function test_recoverERC20_Fail_InvalidSender() public {
+        address[] memory tokens = new address[](incentiveTokens.length);
+        for (uint256 i = 0; i < incentiveTokens.length; i++) {
+            tokens[i] = incentiveTokens[i];
+        }
+
+        address invalidSender = makeAddr("invalidSender");
+        bytes32 incentiveCollectorAdminRole = incentiveCollector.DEFAULT_ADMIN_ROLE();
+        vm.prank(invalidSender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, invalidSender, incentiveCollectorAdminRole
+            )
+        );
+        incentiveCollector.recoverERC20(tokens, invalidSender);
+    }
 }

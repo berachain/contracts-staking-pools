@@ -8,12 +8,14 @@ import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol"
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
+import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 
 contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncentiveCollector {
     using SafeERC20 for IERC20;
     // STORAGE
 
     uint256 public payoutAmount;
+    address internal _stakingPool;
     address internal _smartOperator;
     address internal _stakingRewardsVault;
 
@@ -44,6 +46,7 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncenti
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
         _smartOperator = contracts.smartOperator;
         _stakingRewardsVault = contracts.stakingRewardsVault;
+        _stakingPool = contracts.stakingPool;
 
         emit PayoutAmountSet(0, _payoutAmount);
     }
@@ -56,6 +59,10 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncenti
 
     /// @inheritdoc IIncentiveCollector
     function claim(address[] calldata tokens) external payable {
+        if (IStakingPool(_stakingPool).isFullExited()) {
+            revert NodeIsFullExited();
+        }
+
         if (msg.value != payoutAmount) {
             revert IncorrectPayoutAmount();
         }
@@ -84,6 +91,13 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncenti
         SafeTransferLib.safeTransferETH(_stakingRewardsVault, payoutAmount - fee);
 
         emit IncentiveTokensClaimed(msg.sender, payoutAmount - fee, fee);
+    }
+
+    /// @inheritdoc IIncentiveCollector
+    function recoverERC20(address[] calldata tokens, address receiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            IERC20(tokens[i]).transfer(receiver, IERC20(tokens[i]).balanceOf(address(this)));
+        }
     }
 
     /// @dev Forwards all received native tokens to the staking rewards vault.

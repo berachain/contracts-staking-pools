@@ -27,16 +27,12 @@ contract WithdrawalRequestERC721 is
     /// @notice 192 blocks per epoch * 256 epochs
     uint256 public constant WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY = 49_152;
 
-    /// @notice According to CL specification, a validator stops producing blocks 3 blocks after a full exit request.
-    uint8 public constant CL_ACTIVE_SET_EXCLUSION_DELAY = 3;
-
     // STORAGE
     bytes internal _pubkey;
     IStakingPool internal _stakingPool;
     IWithdrawalVault internal _withdrawalVault;
     ISmartOperator internal _smartOperator;
     bool internal _isFullExited;
-    uint256 internal _fullExitBlockActivation;
 
     uint256 internal _nextRequestId;
     mapping(uint256 requestId => WithdrawalRequest) public withdrawalRequests;
@@ -108,7 +104,6 @@ contract WithdrawalRequestERC721 is
             // For full exit withdrawals, set amount to 0 and mark as exited
             if (isFullExitWithdraw) {
                 _isFullExited = true;
-                _fullExitBlockActivation = block.number + CL_ACTIVE_SET_EXCLUSION_DELAY;
                 assetsInGWei = 0;
             }
             // Trigger withdrawal from vault
@@ -179,8 +174,8 @@ contract WithdrawalRequestERC721 is
             revert RequestNotReady();
         }
 
-        // Redeem BGTs alongside the first withdraw if the node is full exited
-        if (_stakingPool.isFullExited() && block.number > _fullExitBlockActivation) {
+        // redeem BGTs alongside the first withdraw if the node is full exited
+        if (_stakingPool.isFullExited()) {
             try _smartOperator.redeem(address(_withdrawalVault)) { } catch { }
         }
 
