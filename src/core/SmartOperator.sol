@@ -183,7 +183,9 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
         _getStakerRewards();
 
-        BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
+        if (claims.length > 0) {
+            BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
+        }
 
         for (uint256 i = 0; i < tokens.length; i++) {
             IERC20 token = IERC20(tokens[i]);
