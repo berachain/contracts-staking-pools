@@ -30,6 +30,8 @@ interface IWithdrawalRequestERC721 {
     error NotEnoughFunds();
     // Signature: 0x9cbe2357
     error NonTransferable();
+    // Signature: 0xddb5de5e
+    error InvalidSender();
 
     // STRUCTS
 
@@ -69,4 +71,7 @@ interface IWithdrawalRequestERC721 {
     /// @custom:throws RequestNotReady if the delay period has not passed for one of the requests.
     /// @custom:throws NotEnoughFunds if the withdrawal vault does not have enough funds.
     function finalizeWithdrawalRequests(uint256[] calldata requestIds) external;
+
+    /// @notice Notifies the withdrawal request ERC721 that a full exited was triggered from the CL.
+    function notifyFullExitFromCL() external;
 }

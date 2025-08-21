@@ -138,6 +138,16 @@ contract WithdrawalRequestERC721 is
         }
     }
 
+    /// @inheritdoc IWithdrawalRequestERC721
+    function notifyFullExitFromCL() external {
+        if (msg.sender != address(_stakingPool)) {
+            revert InvalidSender();
+        }
+
+        _isFullExited = true;
+        _fullExitBlockActivation = block.number + CL_ACTIVE_SET_EXCLUSION_DELAY;
+    }
+
     // INTERNAL FUNCTIONS
 
     /// @dev Mints a new withdrawal request NFT to the caller and stores the request details

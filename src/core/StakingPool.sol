@@ -8,6 +8,7 @@ import { StBERA } from "src/base/StBERA.sol";
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
+import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
 interface IStakingRewardsVault {
@@ -170,7 +171,13 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     /// @inheritdoc IStakingPool
     function updateTotalDeposits(uint256 newTotalDeposits) external whenNotPaused {
         _validateSender(_accountingOracle);
-        totalDeposits = newTotalDeposits;
+
+        if (newTotalDeposits == 0) {
+            _triggerFullExit();
+            IWithdrawalRequestERC721(_withdrawalRequestERC721).notifyFullExitFromCL();
+        } else {
+            totalDeposits = newTotalDeposits;
+        }
         emit TotalDepositsUpdated(newTotalDeposits);
     }
 
