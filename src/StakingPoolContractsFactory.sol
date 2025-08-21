@@ -24,6 +24,7 @@ contract StakingPoolContractsFactory is
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
     uint256 public constant FIRST_DEPOSIT_AMOUNT = 10_000 ether;
     uint256 public constant INITIAL_PAYOUT_AMOUNT = 100 ether;
+    uint64 public constant MAX_TIMESTAMP_AGE = 10 minutes;
 
     // EVENTS
     event StakingPoolContractsDeployed(
@@ -54,6 +55,8 @@ contract StakingPoolContractsFactory is
     error InvalidFirstDepositAmount();
     // Signature: 0x7b5d09a5
     error InvalidInitialDepositAmount();
+    // Signature: 0xb7d09497
+    error InvalidTimestamp();
 
     // STORAGE
     address public accountingOracle;
@@ -69,8 +72,6 @@ contract StakingPoolContractsFactory is
     constructor() {
         _disableInitializers();
     }
-
-    function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
 
     function initialize(
         address governance,
@@ -183,6 +184,7 @@ contract StakingPoolContractsFactory is
         }
 
         _validateWithdrawalCredentials(withdrawalCredentials);
+        _validateProofsTimestamp(timestamp);
 
         bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
         _verifyValidatorPubkeyInBeaconBlock(beaconBlockRoot, pubkeyProof, pubkey, validatorIndex);
@@ -195,6 +197,62 @@ contract StakingPoolContractsFactory is
         emit StakingPoolActivated(_coreContracts[pubkey].stakingPool);
     }
 
+    function validatePubkeyProof(
+        bytes calldata pubkey,
+        bytes32[] calldata pubkeyProof,
+        uint64 validatorIndex,
+        uint64 timestamp
+    )
+        public
+        view
+    {
+        _validateProofsTimestamp(timestamp);
+        bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
+        _verifyValidatorPubkeyInBeaconBlock(beaconBlockRoot, pubkeyProof, pubkey, validatorIndex);
+    }
+
+    function validateBalanceProof(
+        uint64 balance,
+        bytes32 balancesLeaf,
+        bytes32[] calldata balanceProofs,
+        uint64 validatorIndex,
+        uint64 timestamp
+    )
+        public
+        view
+    {
+        _validateProofsTimestamp(timestamp);
+        bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
+        _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProofs, validatorIndex);
+    }
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     ADMIN FUNCTIONS                        */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyOwner { }
+
+    /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
+    /// beacon state is modified).
+    function setZeroValidatorPubkeyGIndex(uint64 _zeroValidatorPubkeyGIndex) public onlyOwner {
+        _setZeroValidatorPubkeyGIndex(_zeroValidatorPubkeyGIndex);
+    }
+
+    /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
+    /// beacon state is modified).
+    function setZeroValidatorWithdrawalCredentialsGIndex(uint64 _zeroValidatorWithdrawalCredentialsGIndex)
+        public
+        onlyOwner
+    {
+        _setZeroValidatorWithdrawalCredentialsGIndex(_zeroValidatorWithdrawalCredentialsGIndex);
+    }
+
+    /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
+    /// beacon state is modified).
+    function setZeroValidatorBalanceGIndex(uint64 _zeroValidatorBalanceGIndex) public onlyOwner {
+        _setZeroValidatorBalanceGIndex(_zeroValidatorBalanceGIndex);
+    }
+
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*              UPGRADE BEACON IMPLEMENTATIONS                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -203,8 +261,7 @@ contract StakingPoolContractsFactory is
     /// @param newImplementation The address of the new implementation contract
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeSmartOperatorBeaconImpl(address newImplementation) external {
-        _checkOwner();
+    function upgradeSmartOperatorBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconSmartOperator, newImplementation);
 
         emit SmartOperatorBeaconImplUpgraded(newImplementation);
@@ -214,8 +271,7 @@ contract StakingPoolContractsFactory is
     /// @param newImplementation The address of the new implementation contract
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeStakingPoolBeaconImpl(address newImplementation) external {
-        _checkOwner();
+    function upgradeStakingPoolBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconStakingPool, newImplementation);
 
         emit StakingPoolBeaconImplUpgraded(newImplementation);
@@ -225,8 +281,7 @@ contract StakingPoolContractsFactory is
     /// @param newImplementation The address of the new implementation contract
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeStakingRewardsVaultBeaconImpl(address newImplementation) external {
-        _checkOwner();
+    function upgradeStakingRewardsVaultBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconStakingRewardsVault, newImplementation);
 
         emit StakingRewardsVaultBeaconImplUpgraded(newImplementation);
@@ -236,8 +291,7 @@ contract StakingPoolContractsFactory is
     /// @param newImplementation The address of the new implementation contract
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external {
-        _checkOwner();
+    function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconWithdrawalRequestERC721, newImplementation);
 
         emit WithdrawalRequestERC721BeaconImplUpgraded(newImplementation);
@@ -247,8 +301,7 @@ contract StakingPoolContractsFactory is
     /// @param newImplementation The address of the new implementation contract
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external {
-        _checkOwner();
+    function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconIncentiveCollector, newImplementation);
 
         emit IncentiveCollectorBeaconImplUpgraded(newImplementation);
@@ -301,6 +354,12 @@ contract StakingPoolContractsFactory is
         bytes memory expectedCredentials = _withdrawalAddressToCredentials(withdrawalVault);
         if (keccak256(withdrawalCredentials) != keccak256(expectedCredentials)) {
             revert InvalidWithdrawalCredentials();
+        }
+    }
+
+    function _validateProofsTimestamp(uint64 timestamp) internal view {
+        if (timestamp > block.timestamp || block.timestamp - timestamp > MAX_TIMESTAMP_AGE) {
+            revert InvalidTimestamp();
         }
     }
 

@@ -54,20 +54,19 @@ abstract contract BeaconRootsHelper {
     uint256[50] private _gap;
 
     /// @dev This action should be permissioned to prevent unauthorized actors from modifying inappropriately.
-    function setZeroValidatorPubkeyGIndex(uint64 _zeroValidatorPubkeyGIndex) public virtual {
+    function _setZeroValidatorPubkeyGIndex(uint64 _zeroValidatorPubkeyGIndex) internal {
         zeroValidatorPubkeyGIndex = _zeroValidatorPubkeyGIndex;
         emit ZeroValidatorPubkeyGIndexChanged(_zeroValidatorPubkeyGIndex);
     }
 
-    function setZeroValidatorWithdrawalCredentialsGIndex(uint64 _zeroValidatorWithdrawalCredentialsGIndex)
-        public
-        virtual
-    {
+    /// @dev This action should be permissioned to prevent unauthorized actors from modifying inappropriately.
+    function _setZeroValidatorWithdrawalCredentialsGIndex(uint64 _zeroValidatorWithdrawalCredentialsGIndex) internal {
         zeroValidatorWithdrawalCredentialsGIndex = _zeroValidatorWithdrawalCredentialsGIndex;
         emit ZeroValidatorWithdrawalCredentialsGIndexChanged(_zeroValidatorWithdrawalCredentialsGIndex);
     }
 
-    function setZeroValidatorBalanceGIndex(uint64 _zeroValidatorBalanceGIndex) public virtual {
+    /// @dev This action should be permissioned to prevent unauthorized actors from modifying inappropriately.
+    function _setZeroValidatorBalanceGIndex(uint64 _zeroValidatorBalanceGIndex) internal {
         zeroValidatorBalanceGIndex = _zeroValidatorBalanceGIndex;
         emit ZeroValidatorBalanceGIndexChanged(_zeroValidatorBalanceGIndex);
     }
@@ -194,13 +193,13 @@ abstract contract BeaconRootsHelper {
             value := and(shifted, 0xffffffffffffffff)
         }
 
-        return reverseUint64(value);
+        return _reverseUint64(value);
     }
 
     /// @notice Reverses the byte order of a uint64 value
     /// @param input The uint64 value to reverse
     /// @return The uint64 value with bytes in reverse order
-    function reverseUint64(uint64 input) internal pure returns (uint64) {
+    function _reverseUint64(uint64 input) internal pure returns (uint64) {
         uint64 result;
         // Iterate through each byte (8 total for uint64)
         // On each iteration:

@@ -24,6 +24,33 @@ contract StakingPoolsContractsFactoryTest is Base {
         super.setUp();
     }
 
+    function test_setGeneralizedIndexes() public {
+        stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(100);
+        assertEq(stakingPoolContractsFactory.zeroValidatorPubkeyGIndex(), 100);
+
+        stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(100);
+        assertEq(stakingPoolContractsFactory.zeroValidatorWithdrawalCredentialsGIndex(), 100);
+
+        stakingPoolContractsFactory.setZeroValidatorBalanceGIndex(100);
+        assertEq(stakingPoolContractsFactory.zeroValidatorBalanceGIndex(), 100);
+    }
+
+    function test_setGeneralizedIndexes_NotOwner() public {
+        address notOwner = makeAddr("notOwner");
+
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(100);
+
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPoolContractsFactory.setZeroValidatorWithdrawalCredentialsGIndex(100);
+
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPoolContractsFactory.setZeroValidatorBalanceGIndex(100);
+    }
+
     function test_deployStakingPoolContracts() public {
         vm.deal(address(this), type(uint256).max);
 
@@ -98,6 +125,38 @@ contract StakingPoolsContractsFactoryTest is Base {
             validatorData.index,
             initialDepositAmount,
             uint64(block.timestamp)
+        );
+    }
+
+    function test_activateStakingPool_InvalidTimestamp() public {
+        _deployStakingPoolContracts(validatorData.pubkey);
+        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(validatorData.withdrawalAddress);
+        uint256 initialDepositAmount = 10_000 ether;
+
+        vm.warp(vm.getBlockTimestamp() + 15 minutes);
+
+        // Timestamp is older then limit
+        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        stakingPoolContractsFactory.activateStakingPool(
+            validatorData.pubkey,
+            withdrawalCredentials,
+            validatorData.pubkeyProof,
+            validatorData.withdrawalCredentialsProof,
+            validatorData.index,
+            initialDepositAmount,
+            uint64(block.timestamp - 10 minutes - 1 seconds)
+        );
+
+        // Timestamp is the future
+        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        stakingPoolContractsFactory.activateStakingPool(
+            validatorData.pubkey,
+            withdrawalCredentials,
+            validatorData.pubkeyProof,
+            validatorData.withdrawalCredentialsProof,
+            validatorData.index,
+            initialDepositAmount,
+            uint64(block.timestamp + 1 seconds)
         );
     }
 
