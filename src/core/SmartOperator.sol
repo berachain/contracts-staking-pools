@@ -4,7 +4,7 @@ pragma solidity ^0.8.30;
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
@@ -17,6 +17,7 @@ import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributo
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
 contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeable, PausableUpgradeable {
+    using SafeERC20 for IERC20;
     // CONSTANTS
 
     // Berachain references
@@ -183,8 +184,14 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
         _getStakerRewards();
 
         BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
+
         for (uint256 i = 0; i < tokens.length; i++) {
-            IERC20(tokens[i]).transfer(_incentiveCollector, IERC20(tokens[i]).balanceOf(address(this)));
+            IERC20 token = IERC20(tokens[i]);
+            uint256 balance = token.balanceOf(address(this));
+
+            if (balance > 0) {
+                token.safeTransfer(_incentiveCollector, balance);
+            }
         }
     }
 

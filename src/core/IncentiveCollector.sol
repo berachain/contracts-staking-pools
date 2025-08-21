@@ -3,13 +3,14 @@ pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 
 contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncentiveCollector {
+    using SafeERC20 for IERC20;
     // STORAGE
 
     uint256 public payoutAmount;
@@ -60,12 +61,14 @@ contract IncentiveCollector is Initializable, AccessControlUpgradeable, IIncenti
         }
 
         for (uint256 i = 0; i < tokens.length;) {
-            address token = tokens[i];
-            uint256 balance = IERC20(tokens[i]).balanceOf(address(this));
+            IERC20 token = IERC20(tokens[i]);
+            uint256 balance = token.balanceOf(address(this));
+
             if (balance > 0) {
-                IERC20(tokens[i]).transfer(msg.sender, balance);
-                emit IncentiveTokenClaimed(msg.sender, token, balance);
+                token.safeTransfer(msg.sender, balance);
+                emit IncentiveTokenClaimed(msg.sender, address(token), balance);
             }
+
             unchecked {
                 ++i;
             }
