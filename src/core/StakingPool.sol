@@ -179,7 +179,13 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
             IWithdrawalRequestERC721(_withdrawalRequestERC721).notifyFullExitFromCL();
         } else {
             totalDeposits = newTotalDeposits;
+
+            // Pause if the pool is not able to deposit the minimum amount to CL
+            if (MAX_EFFECTIVE_BALANCE - totalDeposits < MIN_CL_DEPOSIT_AMOUNT) {
+                _pause();
+            }
         }
+
         emit TotalDepositsUpdated(newTotalDeposits);
     }
 

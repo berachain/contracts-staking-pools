@@ -138,9 +138,7 @@ contract WithdrawalRequestERC721 is
         if (msg.sender != address(_stakingPool)) {
             revert InvalidSender();
         }
-
         _isFullExited = true;
-        _fullExitBlockActivation = block.number + CL_ACTIVE_SET_EXCLUSION_DELAY;
     }
 
     // INTERNAL FUNCTIONS

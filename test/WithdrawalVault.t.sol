@@ -261,7 +261,7 @@ contract WithdrawalVaultTest is Base {
     }
 
     function test_allocateWithdrawals_MultipleValidators() public {
-        bytes memory pubkey2 = _create96Byte();
+        bytes memory pubkey2 = _create48Byte();
 
         _deployStakingPoolContracts(pubkey2);
 

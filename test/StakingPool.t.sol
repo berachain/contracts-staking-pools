@@ -304,7 +304,9 @@ contract StakingPoolTest is Base {
 
     function test_unpause_Fail_FullExited() public {
         // set isFullExited to true
-        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(uint256(1)));
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
+        uint256 newValue = currentValue | (1 << 8);
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
         assertEq(stakingPool.isFullExited(), true);
 
         vm.expectRevert(IStakingPool.StakingPoolFullExited.selector);
@@ -398,5 +400,15 @@ contract StakingPoolTest is Base {
             stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - baseRateFeeAmount)
                 + submitAmount
         );
+    }
+
+    function test_updateTotalDeposits_PauseStakingPool() public {
+        test_activate();
+
+        uint256 newBalance = stakingPool.MAX_EFFECTIVE_BALANCE() - stakingPool.MIN_CL_DEPOSIT_AMOUNT() + 1;
+        vm.prank(address(accountingOracle));
+        stakingPool.updateTotalDeposits(newBalance);
+
+        assertTrue(stakingPool.paused());
     }
 }
