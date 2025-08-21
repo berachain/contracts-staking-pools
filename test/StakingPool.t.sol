@@ -40,6 +40,7 @@ contract StakingPoolTest is Base {
         emit IStakingPool.StakingPoolActivated();
         stakingPool.activate(INITIAL_DEPOSIT_AMOUNT);
 
+        assertTrue(stakingPool.isActive());
         assertFalse(stakingPool.paused());
         assertEq(stakingPool.balanceOf(address(this)), INITIAL_DEPOSIT_AMOUNT);
     }

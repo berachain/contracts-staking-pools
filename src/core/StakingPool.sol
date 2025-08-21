@@ -53,6 +53,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     uint256 internal _validatorActivationBlock;
     uint256 internal _frozenTotalAssets;
 
+    bool public isActive;
     bool public isFullExited;
     uint256 public bufferedAssets;
     uint256 public totalDeposits;
@@ -118,13 +119,14 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     function activate(uint256 initialDepositAmount) external {
         _validateSender(_factory);
 
-        if (!paused() || totalDeposits > 0) {
+        if (isActive) {
             revert StakingPoolAlreadyActivated();
         }
 
         totalDeposits = initialDepositAmount;
         _mintShares(_defaultSharesRecipient, initialDepositAmount);
 
+        isActive = true;
         _unpause();
         emit StakingPoolActivated();
     }
