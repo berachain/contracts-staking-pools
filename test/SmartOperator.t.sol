@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import { Base } from "./base/Base.t.sol";
-import { SmartOperator } from "src/core/SmartOperator.sol";
+import { SmartOperator, ISmartOperator } from "src/core/SmartOperator.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
@@ -231,7 +231,7 @@ contract SmartOperatorTest is Base {
         address receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit SmartOperator.BGTRedeemed(receiver, 100 ether, 0);
+        emit ISmartOperator.BGTRedeemed(receiver, 100 ether, 0);
         smartOperator.redeem(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
@@ -256,7 +256,7 @@ contract SmartOperatorTest is Base {
         address receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit SmartOperator.BGTRedeemed(receiver, 100 ether, 0);
+        emit ISmartOperator.BGTRedeemed(receiver, 100 ether, 0);
         smartOperator.redeem(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
@@ -270,7 +270,7 @@ contract SmartOperatorTest is Base {
         receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit SmartOperator.BGTRedeemed(receiver, 190 ether, 10 ether);
+        emit ISmartOperator.BGTRedeemed(receiver, 190 ether, 10 ether);
         smartOperator.redeem(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);

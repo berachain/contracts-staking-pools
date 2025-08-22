@@ -9,7 +9,7 @@ import { console2 } from "forge-std/console2.sol";
 
 import { Base } from "./base/Base.t.sol";
 import { MockBeaconImpl } from "./mock/MockBeaconImpl.sol";
-import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
+import { StakingPoolContractsFactory, IStakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 
 contract StakingPoolsContractsFactoryTest is Base {
@@ -87,7 +87,7 @@ contract StakingPoolsContractsFactoryTest is Base {
         bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(address(withdrawalVault));
 
         address manager = makeAddr("manager");
-        vm.expectRevert(StakingPoolContractsFactory.OperatorAlreadySet.selector);
+        vm.expectRevert(IStakingPoolContractsFactory.OperatorAlreadySet.selector);
         stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
             fixtureValidatorData.pubkey, withdrawalCredentials, _create96Byte(), manager, address(this)
         );
@@ -97,7 +97,7 @@ contract StakingPoolsContractsFactoryTest is Base {
         vm.assume(beaconTypeRaw <= uint8(type(BeaconType).max));
 
         BeaconType beacon = BeaconType(beaconTypeRaw);
-        vm.expectRevert(StakingPoolContractsFactory.InvalidAddress.selector);
+        vm.expectRevert(IStakingPoolContractsFactory.InvalidAddress.selector);
         _upgradeBeacon(beacon, address(0));
     }
 
@@ -123,7 +123,7 @@ contract StakingPoolsContractsFactoryTest is Base {
 
         address stakingPool = address(_getStakingPool(fixtureValidatorData.pubkey));
         vm.expectEmit(true, true, true, true);
-        emit StakingPoolContractsFactory.StakingPoolActivated(stakingPool);
+        emit IStakingPoolContractsFactory.StakingPoolActivated(stakingPool);
         stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp));
 
         StakingPool stakingPoolContract = StakingPool(payable(stakingPool));
@@ -143,13 +143,13 @@ contract StakingPoolsContractsFactoryTest is Base {
         StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
 
         // Timestamp is older then limit
-        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingPoolContractsFactory.InvalidTimestamp.selector));
         stakingPoolContractsFactory.activateStakingPool(
             validatorData, proofData, uint64(block.timestamp - 10 minutes - 1 seconds)
         );
 
         // Timestamp is the future
-        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingPoolContractsFactory.InvalidTimestamp.selector));
         stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp + 1 seconds));
     }
 
@@ -164,7 +164,7 @@ contract StakingPoolsContractsFactoryTest is Base {
             _helper_getValidatorData(initialDepositAmountInGWei);
         StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
 
-        vm.expectRevert(StakingPoolContractsFactory.InvalidInitialDepositAmount.selector);
+        vm.expectRevert(IStakingPoolContractsFactory.InvalidInitialDepositAmount.selector);
         stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp));
     }
 
@@ -231,15 +231,15 @@ contract StakingPoolsContractsFactoryTest is Base {
 
     function emitBeaconUpgraded(BeaconType beacon, address newImpl) internal {
         if (beacon == BeaconType.SmartOperator) {
-            emit StakingPoolContractsFactory.SmartOperatorBeaconImplUpgraded(newImpl);
+            emit IStakingPoolContractsFactory.SmartOperatorBeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.StakingPool) {
-            emit StakingPoolContractsFactory.StakingPoolBeaconImplUpgraded(newImpl);
+            emit IStakingPoolContractsFactory.StakingPoolBeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.StakingRewardsVault) {
-            emit StakingPoolContractsFactory.StakingRewardsVaultBeaconImplUpgraded(newImpl);
+            emit IStakingPoolContractsFactory.StakingRewardsVaultBeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.WithdrawalRequestERC721) {
-            emit StakingPoolContractsFactory.WithdrawalRequestERC721BeaconImplUpgraded(newImpl);
+            emit IStakingPoolContractsFactory.WithdrawalRequestERC721BeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.IncentiveCollector) {
-            emit StakingPoolContractsFactory.IncentiveCollectorBeaconImplUpgraded(newImpl);
+            emit IStakingPoolContractsFactory.IncentiveCollectorBeaconImplUpgraded(newImpl);
         } else {
             revert("Unknown beacon type");
         }
@@ -270,7 +270,7 @@ contract StakingPoolsContractsFactoryTest is Base {
     {
         bytes memory withdrawalCredentials =
             _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
-        return StakingPoolContractsFactory.ValidatorData({
+        return IStakingPoolContractsFactory.ValidatorData({
             pubkey: fixtureValidatorData.pubkey,
             withdrawalCredentials: withdrawalCredentials,
             initialDepositAmount: initialDepositAmountInGWei,
@@ -279,7 +279,7 @@ contract StakingPoolsContractsFactoryTest is Base {
     }
 
     function _helper_getProofData() internal returns (StakingPoolContractsFactory.ProofData memory) {
-        return StakingPoolContractsFactory.ProofData({
+        return IStakingPoolContractsFactory.ProofData({
             pubkeyProof: fixtureValidatorData.pubkeyProof,
             withdrawalCredentialsProof: fixtureValidatorData.withdrawalCredentialsProof,
             initialDepositProof: fixtureValidatorData.balanceProof,

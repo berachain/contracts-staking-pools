@@ -6,7 +6,6 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { UpgradeableBeacon } from "@solady/src/utils/UpgradeableBeacon.sol";
 import { LibClone } from "@solady/src/utils/LibClone.sol";
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
-import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
@@ -14,74 +13,20 @@ import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
+import { IStakingPoolContractsFactory } from "src/interfaces/IStakingPoolContractsFactory.sol";
 
 contract StakingPoolContractsFactory is
-    ICoreContractsStorage,
+    IStakingPoolContractsFactory,
     BeaconRootsHelper,
     OwnableUpgradeable,
     UUPSUpgradeable
 {
+    // CONSTANTS
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
     uint256 public constant FIRST_DEPOSIT_AMOUNT_WEI = 10_000 ether;
     uint256 public constant FIRST_DEPOSIT_AMOUNT_GWEI = 10_000 gwei;
     uint256 public constant INITIAL_PAYOUT_AMOUNT = 100 ether;
     uint64 public constant MAX_TIMESTAMP_AGE = 10 minutes;
-
-    // EVENTS
-    event StakingPoolContractsDeployed(
-        address smartOperator,
-        address stakingPool,
-        address stakingRewardsVault,
-        address withdrawalRequestERC721,
-        address incentiveCollector
-    );
-    event StakingPoolActivated(address stakingPool);
-    event SmartOperatorBeaconImplUpgraded(address newImplementation);
-    event StakingPoolBeaconImplUpgraded(address newImplementation);
-    event StakingRewardsVaultBeaconImplUpgraded(address newImplementation);
-    event WithdrawalRequestERC721BeaconImplUpgraded(address newImplementation);
-    event IncentiveCollectorBeaconImplUpgraded(address newImplementation);
-    event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
-
-    // ERRORS
-    // Signature: 0xc4142b41
-    error OperatorAlreadySet();
-    // Signature: 0xccea9e6f
-    error InvalidOperator();
-    // Signature: 0x9be73159
-    error InvalidWithdrawalCredentials();
-    // Signature: 0xe6c4247b
-    error InvalidAddress();
-    // Signature: 0x29829bdd
-    error InvalidFirstDepositAmount();
-    // Signature: 0x7b5d09a5
-    error InvalidInitialDepositAmount();
-    // Signature: 0xb7d09497
-    error InvalidTimestamp();
-
-    /// @notice Data for the validator.
-    /// @param pubkey The pubkey of the validator.
-    /// @param withdrawalCredentials The withdrawal credentials of the validator.
-    /// @param initialDepositAmount The initial deposit amount of the validator in GWei.
-    /// @param validatorIndex The index of the validator.
-    struct ValidatorData {
-        bytes pubkey;
-        bytes withdrawalCredentials;
-        uint64 initialDepositAmount;
-        uint64 validatorIndex;
-    }
-
-    /// @notice Data for the proofs.
-    /// @param pubkeyProof The proof of the pubkey.
-    /// @param withdrawalCredentialsProof The proof of the withdrawal credentials.
-    /// @param initialDepositProof The proof of the initial deposit.
-    /// @param initialDepositProofLeaf The leaf of the initial deposit.
-    struct ProofData {
-        bytes32[] pubkeyProof;
-        bytes32[] withdrawalCredentialsProof;
-        bytes32[] initialDepositProof;
-        bytes32 initialDepositProofLeaf;
-    }
 
     // STORAGE
     address public accountingOracle;
@@ -289,50 +234,34 @@ contract StakingPoolContractsFactory is
     /*              UPGRADE BEACON IMPLEMENTATIONS                */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
 
-    /// @notice Upgrades the implementation of the SmartOperator beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    /// @inheritdoc IStakingPoolContractsFactory
     function upgradeSmartOperatorBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconSmartOperator, newImplementation);
 
         emit SmartOperatorBeaconImplUpgraded(newImplementation);
     }
 
-    /// @notice Upgrades the implementation of the StakingPool beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    /// @inheritdoc IStakingPoolContractsFactory
     function upgradeStakingPoolBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconStakingPool, newImplementation);
 
         emit StakingPoolBeaconImplUpgraded(newImplementation);
     }
 
-    /// @notice Upgrades the implementation of the StakingRewardsVault beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    /// @inheritdoc IStakingPoolContractsFactory
     function upgradeStakingRewardsVaultBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconStakingRewardsVault, newImplementation);
 
         emit StakingRewardsVaultBeaconImplUpgraded(newImplementation);
     }
 
-    /// @notice Upgrades the implementation of the WithdrawalRequestERC721 beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
+    /// @inheritdoc IStakingPoolContractsFactory
     function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconWithdrawalRequestERC721, newImplementation);
 
         emit WithdrawalRequestERC721BeaconImplUpgraded(newImplementation);
     }
 
-    /// @notice Upgrades the implementation of the IncentiveCollector beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
     function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconIncentiveCollector, newImplementation);
 

@@ -2,13 +2,12 @@
 pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 
-contract StakingRewardsVault is IStakingRewardsVault, Initializable, AccessControlUpgradeable {
+contract StakingRewardsVault is IStakingRewardsVault, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
 
     IStakingPool internal _stakingPool;

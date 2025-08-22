@@ -27,8 +27,6 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
         _disableInitializers();
     }
 
-    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) { }
-
     receive() external payable { }
 
     function initialize(address governance, address factory) external initializer {
@@ -37,6 +35,8 @@ contract WithdrawalVault is IWithdrawalVault, AccessControlUpgradeable, UUPSUpgr
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _factory = factory;
     }
+
+    function _authorizeUpgrade(address newImplementation) internal override onlyRole(DEFAULT_ADMIN_ROLE) { }
 
     /// @inheritdoc IWithdrawalVault
     function whitelistWithdrawalRequestERC721(address withdrawalRequestERC721) external {

@@ -3,7 +3,6 @@ pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
@@ -16,23 +15,17 @@ import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
-contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeable, PausableUpgradeable {
+contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgradeable {
     using SafeERC20 for IERC20;
     // CONSTANTS
 
     // Berachain references
-
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
     IBeraChef public constant BERA_CHEF = IBeraChef(0xdf960E8F3F19C481dDE769edEDD439ea1a63426a);
     IBGTStaker public constant BGT_STAKER = IBGTStaker(0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6);
     IBGTIncentiveDistributor public constant BGT_INCENTIVE_DISTRIBUTOR =
         IBGTIncentiveDistributor(0x77DA09bC82652f9A14d1b170a001e759640298e6);
     address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
-
-    // EVENTS
-    event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
-    event ProtocolFeeCollected(uint256 amount, address receiver);
-    event BGTRedeemed(address receiver, uint256 amount, uint256 fee);
 
     /// @dev Validator admin manages other roles and is managed by the contract owner.
     bytes32 public constant VALIDATOR_ADMIN_ROLE = keccak256("VALIDATOR_ADMIN_ROLE");

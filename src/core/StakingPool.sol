@@ -1,26 +1,19 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.30;
 
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
+import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+
 import { StBERA } from "src/base/StBERA.sol";
-import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
+import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
+import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
-import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
-interface IStakingRewardsVault {
-    function withdrawRewards(uint256 amount) external;
-}
-
-interface ISmartOperator {
-    function rebaseableBgtAmount() external view returns (uint256);
-    function queueDropBoost() external;
-}
-
-contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable, OwnableUpgradeable {
+contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
     // CONSTANTS
 
     /// @dev Referece to BeaconDepositContract on Berachain.

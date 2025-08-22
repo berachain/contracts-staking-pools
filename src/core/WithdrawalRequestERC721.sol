@@ -2,7 +2,6 @@
 pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { ERC721EnumerableUpgradeable } from
     "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import { ERC721Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
@@ -16,11 +15,10 @@ import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 contract WithdrawalRequestERC721 is
-    Initializable,
+    IWithdrawalRequestERC721,
     ERC721EnumerableUpgradeable,
     AccessControlUpgradeable,
-    ReentrancyGuardUpgradeable,
-    IWithdrawalRequestERC721
+    ReentrancyGuardUpgradeable
 {
     // CONSTANTS
 

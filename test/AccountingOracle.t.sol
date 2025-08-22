@@ -5,7 +5,7 @@ import { Base } from "./base/Base.t.sol";
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { Pausable } from "@openzeppelin/contracts/utils/Pausable.sol";
-import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
+import { StakingPoolContractsFactory, IStakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
 
 contract AccountingOracleTest is Base {
     StakingPool stakingPool;
@@ -49,7 +49,7 @@ contract AccountingOracleTest is Base {
         // Timestamp is older then limit
         mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
-        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingPoolContractsFactory.InvalidTimestamp.selector));
         accountingOracle.updateTotalDeposits(
             fixtureValidatorData.pubkey,
             fixtureValidatorData.pubkeyProof,
@@ -62,7 +62,7 @@ contract AccountingOracleTest is Base {
 
         // Timestamp is the future
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
-        vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IStakingPoolContractsFactory.InvalidTimestamp.selector));
         accountingOracle.updateTotalDeposits(
             fixtureValidatorData.pubkey,
             fixtureValidatorData.pubkeyProof,

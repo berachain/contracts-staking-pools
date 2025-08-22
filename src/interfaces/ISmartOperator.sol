@@ -18,6 +18,11 @@ interface ISmartOperator {
     // Signature: 0x69de7e5d
     error StakingPoolIsFullExited();
 
+    // EVENTS
+    event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
+    event ProtocolFeeCollected(uint256 amount, address receiver);
+    event BGTRedeemed(address receiver, uint256 amount, uint256 fee);
+
     // FUNCTIONS
 
     /// @notice This function is used to auto-boost the validator key for the current unboosted amount of BGT.
