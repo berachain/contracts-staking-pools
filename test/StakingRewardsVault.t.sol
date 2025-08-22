@@ -11,9 +11,9 @@ contract StakingRewardsVaultTest is Base {
 
     function setUp() public override {
         super.setUp();
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        stakingRewardsVault = _getStakingRewardsVault(validatorData.pubkey);
+        stakingRewardsVault = _getStakingRewardsVault(fixtureValidatorData.pubkey);
     }
 
     function test_receiveNative(uint256 amount) public {
@@ -29,7 +29,7 @@ contract StakingRewardsVaultTest is Base {
     function testFuzz_withdrawRewards(uint256 amount) public {
         vm.deal(address(stakingRewardsVault), amount);
 
-        vm.prank(address(_getStakingPool(validatorData.pubkey)));
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
         vm.expectEmit(true, true, true, true);
         emit IStakingRewardsVault.RewardsWithdrawn(amount);
         stakingRewardsVault.withdrawRewards(amount);

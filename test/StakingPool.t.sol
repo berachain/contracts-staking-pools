@@ -20,16 +20,16 @@ contract StakingPoolTest is Base {
 
     function setUp() public override {
         super.setUp();
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        stakingPool = _getStakingPool(validatorData.pubkey);
-        smartOperator = _getSmartOperator(validatorData.pubkey);
+        stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
+        smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
 
         smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
     }
 
     function test_getValidatorPubkey() public view {
-        assertEq(stakingPool.getValidatorPubkey(), validatorData.pubkey);
+        assertEq(stakingPool.getValidatorPubkey(), fixtureValidatorData.pubkey);
     }
 
     function test_activate() public {
@@ -64,7 +64,7 @@ contract StakingPoolTest is Base {
     }
 
     function testFuzz_receiveRewards(uint256 amount) public {
-        address stakingRewardsVault = address(_getStakingRewardsVault(validatorData.pubkey));
+        address stakingRewardsVault = address(_getStakingRewardsVault(fixtureValidatorData.pubkey));
 
         vm.deal(stakingRewardsVault, amount);
         vm.prank(stakingRewardsVault);
@@ -74,7 +74,7 @@ contract StakingPoolTest is Base {
     }
 
     function test_receiveRewards_Fail_NotStakingRewardsVault() public {
-        address stakingRewardsVault = address(_getStakingRewardsVault(validatorData.pubkey));
+        address stakingRewardsVault = address(_getStakingRewardsVault(fixtureValidatorData.pubkey));
         vm.expectRevert(
             abi.encodeWithSelector(IStakingPool.InvalidSender.selector, address(this), stakingRewardsVault)
         );
@@ -153,7 +153,7 @@ contract StakingPoolTest is Base {
     function testFuzz_submit_correctShares(uint256 userDepositAmount) public {
         test_activate();
 
-        vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 1000 ether);
 
         userDepositAmount = bound(userDepositAmount, 1, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT);
         vm.deal(bob, userDepositAmount);
@@ -189,7 +189,7 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.convertToShares(amount), amount);
 
         // With yield
-        vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 1000 ether);
         assertApproxEqAbs(stakingPool.convertToShares(100e18), 90.90909090909090909e18, 1);
     }
 
@@ -201,7 +201,7 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.convertToAssets(shares), shares);
 
         // With yield
-        vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 1000 ether);
         assertApproxEqAbs(stakingPool.convertToAssets(1e18), 1.1e18, 1);
     }
 
@@ -224,7 +224,7 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertFalse(stakingPool.activeTresholdReached());
 
-        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
         (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
             stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
 
@@ -243,13 +243,13 @@ contract StakingPoolTest is Base {
         _helper_submit(alice, aliceDepositAmount);
         _helper_submit(bob, bobDepositAmount);
 
-        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
         stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
 
         vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
 
-        vm.prank(address(_getWithdrawalRequestERC721(validatorData.pubkey)));
+        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
         (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
             stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
 
@@ -263,10 +263,10 @@ contract StakingPoolTest is Base {
         (uint256 boundedUserDepositAmount,,) = testFuzz_submit(userDepositAmount);
         assertEq(stakingPool.totalAssets(), INITIAL_DEPOSIT_AMOUNT + boundedUserDepositAmount);
 
-        vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), donationAmount);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), donationAmount);
         assertEq(stakingPool.totalAssets(), INITIAL_DEPOSIT_AMOUNT + boundedUserDepositAmount + donationAmount);
 
-        mockBGT.mint(address(_getSmartOperator(validatorData.pubkey)), 1000 ether);
+        mockBGT.mint(address(_getSmartOperator(fixtureValidatorData.pubkey)), 1000 ether);
         assertEq(
             stakingPool.totalAssets(), INITIAL_DEPOSIT_AMOUNT + boundedUserDepositAmount + donationAmount + 1000 ether
         );
@@ -341,7 +341,7 @@ contract StakingPoolTest is Base {
             INITIAL_DEPOSIT_AMOUNT + mockBGT.balanceOf(address(smartOperator)) + submitAmount
         );
 
-        vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), rewardsAmount);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
         assertEq(
             stakingPool.totalAssets(),
             INITIAL_DEPOSIT_AMOUNT + mockBGT.balanceOf(address(smartOperator)) + submitAmount + rewardsAmount
@@ -355,7 +355,7 @@ contract StakingPoolTest is Base {
         // Extra checks
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT + (submitAmount * 2) + rewardsAmount);
         assertEq(stakingPool.bufferedAssets(), 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
 
         address charlie = makeAddr("charlie");
         _helper_submit(charlie, submitAmount);

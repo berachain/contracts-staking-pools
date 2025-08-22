@@ -38,7 +38,7 @@ abstract contract Base is Test, Create2Deployer {
         address withdrawalAddress;
         bytes32[] pubkeyProof;
         bytes32[] withdrawalCredentialsProof;
-        bytes32[] balanceProofs;
+        bytes32[] balanceProof;
         uint64 balance;
         bytes32 balancesLeaf;
     }
@@ -62,7 +62,7 @@ abstract contract Base is Test, Create2Deployer {
     MockBGT mockBGT;
     MockBGTStaker mockBGTStaker;
 
-    ValidatorData validatorData;
+    ValidatorData fixtureValidatorData;
 
     function setUp() public virtual {
         _loadValidatorData();
@@ -103,7 +103,7 @@ abstract contract Base is Test, Create2Deployer {
     function _deployMockContracts() internal {
         vm.etch(BeaconRoots.ADDRESS, address(new MockEIP4788()).code);
         mockEIP4788 = MockEIP4788(BeaconRoots.ADDRESS);
-        mockEIP4788.setMockBeaconBlockRoot(validatorData.beaconBlockRoot);
+        mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
 
         vm.etch(EIP_7002, address(new MockEIP7002()).code);
         mockEIP7002 = MockEIP7002(payable(EIP_7002));
@@ -159,7 +159,7 @@ abstract contract Base is Test, Create2Deployer {
 
     function _loadValidatorData() internal {
         // read in proof data
-        validatorData = abi.decode(
+        fixtureValidatorData = abi.decode(
             stdJson.parseRaw(vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_proofs.json")), "$"),
             (ValidatorData)
         );

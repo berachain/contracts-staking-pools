@@ -22,7 +22,8 @@ contract StakingPoolContractsFactory is
     UUPSUpgradeable
 {
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
-    uint256 public constant FIRST_DEPOSIT_AMOUNT = 10_000 ether;
+    uint256 public constant FIRST_DEPOSIT_AMOUNT_WEI = 10_000 ether;
+    uint256 public constant FIRST_DEPOSIT_AMOUNT_GWEI = 10_000 gwei;
     uint256 public constant INITIAL_PAYOUT_AMOUNT = 100 ether;
     uint64 public constant MAX_TIMESTAMP_AGE = 10 minutes;
 
@@ -57,6 +58,30 @@ contract StakingPoolContractsFactory is
     error InvalidInitialDepositAmount();
     // Signature: 0xb7d09497
     error InvalidTimestamp();
+
+    /// @notice Data for the validator.
+    /// @param pubkey The pubkey of the validator.
+    /// @param withdrawalCredentials The withdrawal credentials of the validator.
+    /// @param initialDepositAmount The initial deposit amount of the validator in GWei.
+    /// @param validatorIndex The index of the validator.
+    struct ValidatorData {
+        bytes pubkey;
+        bytes withdrawalCredentials;
+        uint64 initialDepositAmount;
+        uint64 validatorIndex;
+    }
+
+    /// @notice Data for the proofs.
+    /// @param pubkeyProof The proof of the pubkey.
+    /// @param withdrawalCredentialsProof The proof of the withdrawal credentials.
+    /// @param initialDepositProof The proof of the initial deposit.
+    /// @param initialDepositProofLeaf The leaf of the initial deposit.
+    struct ProofData {
+        bytes32[] pubkeyProof;
+        bytes32[] withdrawalCredentialsProof;
+        bytes32[] initialDepositProof;
+        bytes32 initialDepositProofLeaf;
+    }
 
     // STORAGE
     address public accountingOracle;
@@ -120,9 +145,7 @@ contract StakingPoolContractsFactory is
 
         IWithdrawalVault(withdrawalVault).whitelistWithdrawalRequestERC721(coreContracts.withdrawalRequestERC721);
 
-        _performFirstDeposit(
-            pubkey, withdrawalCredentials, signature, coreContracts.smartOperator, FIRST_DEPOSIT_AMOUNT
-        );
+        _performFirstDeposit(pubkey, withdrawalCredentials, signature, coreContracts.smartOperator);
 
         emit StakingPoolContractsDeployed(
             coreContracts.smartOperator,
@@ -165,36 +188,45 @@ contract StakingPoolContractsFactory is
     }
 
     function activateStakingPool(
-        bytes calldata pubkey,
-        bytes calldata withdrawalCredentials,
-        bytes32[] calldata pubkeyProof,
-        bytes32[] calldata withdrawalCredentialsProof,
-        uint64 validatorIndex,
-        uint256 initialDepositAmount,
+        ValidatorData calldata validatorData,
+        ProofData calldata proofData,
         uint64 timestamp
     )
         external
     {
-        if (initialDepositAmount < FIRST_DEPOSIT_AMOUNT) {
+        if (validatorData.initialDepositAmount < FIRST_DEPOSIT_AMOUNT_GWEI) {
             revert InvalidInitialDepositAmount();
         }
 
-        if (BEACON_DEPOSIT.getOperator(pubkey) != _coreContracts[pubkey].smartOperator) {
+        if (BEACON_DEPOSIT.getOperator(validatorData.pubkey) != _coreContracts[validatorData.pubkey].smartOperator) {
             revert InvalidOperator();
         }
 
-        _validateWithdrawalCredentials(withdrawalCredentials);
+        _validateWithdrawalCredentials(validatorData.withdrawalCredentials);
         _validateProofsTimestamp(timestamp);
 
         bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
-        _verifyValidatorPubkeyInBeaconBlock(beaconBlockRoot, pubkeyProof, pubkey, validatorIndex);
+        _verifyValidatorPubkeyInBeaconBlock(
+            beaconBlockRoot, proofData.pubkeyProof, validatorData.pubkey, validatorData.validatorIndex
+        );
         _verifyValidatorWithdrawalCredentialsInBeaconBlock(
-            beaconBlockRoot, withdrawalCredentialsProof, withdrawalCredentials, validatorIndex
+            beaconBlockRoot,
+            proofData.withdrawalCredentialsProof,
+            validatorData.withdrawalCredentials,
+            validatorData.validatorIndex
+        );
+        _verifyValidatorBalanceInBeaconBlock(
+            beaconBlockRoot,
+            validatorData.initialDepositAmount,
+            proofData.initialDepositProofLeaf,
+            proofData.initialDepositProof,
+            validatorData.validatorIndex
         );
 
-        StakingPool(payable(_coreContracts[pubkey].stakingPool)).activate(initialDepositAmount);
+        uint256 initialDepositAmountInWei = uint256(validatorData.initialDepositAmount) * 1 gwei;
+        StakingPool(payable(_coreContracts[validatorData.pubkey].stakingPool)).activate(initialDepositAmountInWei);
 
-        emit StakingPoolActivated(_coreContracts[pubkey].stakingPool);
+        emit StakingPoolActivated(_coreContracts[validatorData.pubkey].stakingPool);
     }
 
     function validatePubkeyProof(
@@ -214,7 +246,7 @@ contract StakingPoolContractsFactory is
     function validateBalanceProof(
         uint64 balance,
         bytes32 balancesLeaf,
-        bytes32[] calldata balanceProofs,
+        bytes32[] calldata balanceProof,
         uint64 validatorIndex,
         uint64 timestamp
     )
@@ -223,7 +255,7 @@ contract StakingPoolContractsFactory is
     {
         _validateProofsTimestamp(timestamp);
         bytes32 beaconBlockRoot = _getBeaconBlockRoot(timestamp);
-        _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProofs, validatorIndex);
+        _verifyValidatorBalanceInBeaconBlock(beaconBlockRoot, balance, balancesLeaf, balanceProof, validatorIndex);
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
@@ -345,7 +377,7 @@ contract StakingPoolContractsFactory is
 
         _validateWithdrawalCredentials(withdrawalCredentials);
 
-        if (msg.value != FIRST_DEPOSIT_AMOUNT) {
+        if (msg.value != FIRST_DEPOSIT_AMOUNT_WEI) {
             revert InvalidFirstDepositAmount();
         }
     }
@@ -406,11 +438,12 @@ contract StakingPoolContractsFactory is
         bytes memory pubkey,
         bytes memory withdrawalCredentials,
         bytes memory depositSignature,
-        address operator,
-        uint256 amount
+        address operator
     )
         internal
     {
-        BEACON_DEPOSIT.deposit{ value: amount }(pubkey, withdrawalCredentials, depositSignature, operator);
+        BEACON_DEPOSIT.deposit{ value: FIRST_DEPOSIT_AMOUNT_WEI }(
+            pubkey, withdrawalCredentials, depositSignature, operator
+        );
     }
 }

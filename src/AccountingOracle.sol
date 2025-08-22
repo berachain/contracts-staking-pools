@@ -20,7 +20,7 @@ interface IStakingPoolContractsFactory {
     function validateBalanceProof(
         uint64 balance,
         bytes32 balancesLeaf,
-        bytes32[] calldata balanceProofs,
+        bytes32[] calldata balanceProof,
         uint64 validatorIndex,
         uint64 timestamp
     )
@@ -53,12 +53,20 @@ contract AccountingOracle is AccessControlUpgradeable, UUPSUpgradeable {
         _factory = IStakingPoolContractsFactory(factory);
     }
 
+    /// @notice Updates the total deposits of a staking pool.
+    /// @param pubkey The pubkey of the validator.
+    /// @param pubkeyProof The proof of the pubkey.
+    /// @param balance The new balance of the validator in GWei.
+    /// @param balancesLeaf The leaf of the balances.
+    /// @param balanceProof The proof of the balance.
+    /// @param validatorIndex The index of the validator.
+    /// @param timestamp The timestamp of the beacon block.
     function updateTotalDeposits(
         bytes memory pubkey,
         bytes32[] calldata pubkeyProof,
         uint64 balance,
         bytes32 balancesLeaf,
-        bytes32[] calldata balanceProofs,
+        bytes32[] calldata balanceProof,
         uint64 validatorIndex,
         uint64 timestamp
     )
@@ -66,9 +74,10 @@ contract AccountingOracle is AccessControlUpgradeable, UUPSUpgradeable {
         onlyRole(FEEDER_ROLE)
     {
         _factory.validatePubkeyProof(pubkey, pubkeyProof, validatorIndex, timestamp);
-        _factory.validateBalanceProof(balance, balancesLeaf, balanceProofs, validatorIndex, timestamp);
+        _factory.validateBalanceProof(balance, balancesLeaf, balanceProof, validatorIndex, timestamp);
 
+        uint256 balanceInWei = uint256(balance) * 1 gwei;
         (, address stakingPool,,,) = _factory.getCoreContracts(pubkey);
-        IStakingPool(stakingPool).updateTotalDeposits(balance);
+        IStakingPool(stakingPool).updateTotalDeposits(balanceInWei);
     }
 }

@@ -16,10 +16,10 @@ contract SmartOperatorTest is Base {
 
     function setUp() public override {
         super.setUp();
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        smartOperator = _getSmartOperator(validatorData.pubkey);
-        withdrawalRequestERC721 = _getWithdrawalRequestERC721(validatorData.pubkey);
+        smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
+        withdrawalRequestERC721 = _getWithdrawalRequestERC721(fixtureValidatorData.pubkey);
     }
 
     function test_initialization() public view {
@@ -162,7 +162,7 @@ contract SmartOperatorTest is Base {
         test_grantRole_IncentiveCollectorManagerRole();
 
         vm.mockCall(
-            address(_getIncentiveCollector(validatorData.pubkey)),
+            address(_getIncentiveCollector(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(IncentiveCollector.setPayoutAmount.selector),
             abi.encode(100_000 ether)
         );

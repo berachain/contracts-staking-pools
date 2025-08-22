@@ -20,10 +20,10 @@ contract IncentiveCollectorTest is Base {
 
     function setUp() public override {
         super.setUp();
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        incentiveCollector = _getIncentiveCollector(validatorData.pubkey);
-        smartOperator = _getSmartOperator(validatorData.pubkey);
+        incentiveCollector = _getIncentiveCollector(fixtureValidatorData.pubkey);
+        smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
 
         smartOperator.grantRole(smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE(), incentiveCollectorManager);
         smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
@@ -45,7 +45,7 @@ contract IncentiveCollectorTest is Base {
         vm.deal(address(this), amount);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
 
         vm.expectEmit(true, true, true, true);
         emit IIncentiveCollector.Donated(address(this), amount);
@@ -53,7 +53,7 @@ contract IncentiveCollectorTest is Base {
         assertTrue(success);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, amount);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, amount);
     }
 
     function test_setPayoutAmount(uint256 payoutAmount) public {
@@ -85,7 +85,7 @@ contract IncentiveCollectorTest is Base {
         vm.deal(claimer, payoutAmount);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
             uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
@@ -103,7 +103,7 @@ contract IncentiveCollectorTest is Base {
         incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, payoutAmount);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, payoutAmount);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
             uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
@@ -125,7 +125,7 @@ contract IncentiveCollectorTest is Base {
         vm.deal(claimer, payoutAmount);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
             uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
@@ -142,7 +142,7 @@ contract IncentiveCollectorTest is Base {
         incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(validatorData.pubkey)).balance, payoutAmount - 10 ether);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, payoutAmount - 10 ether);
         assertEq(address(smartOperator).balance, 10 ether);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {

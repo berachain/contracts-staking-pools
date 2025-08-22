@@ -12,8 +12,8 @@ contract AccountingOracleTest is Base {
 
     function setUp() public override {
         super.setUp();
-        _deployStakingPoolContracts(validatorData.pubkey);
-        stakingPool = _getStakingPool(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
+        stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
     }
 
     function testFuzz_updateTotalDeposits(uint256 timestampAge) public {
@@ -24,19 +24,20 @@ contract AccountingOracleTest is Base {
 
         accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
 
-        mockEIP4788.setMockBeaconBlockRoot(validatorData.beaconBlockRoot);
+        mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
         accountingOracle.updateTotalDeposits(
-            validatorData.pubkey,
-            validatorData.pubkeyProof,
-            validatorData.balance,
-            validatorData.balancesLeaf,
-            validatorData.balanceProofs,
-            validatorData.index,
+            fixtureValidatorData.pubkey,
+            fixtureValidatorData.pubkeyProof,
+            fixtureValidatorData.balance,
+            fixtureValidatorData.balancesLeaf,
+            fixtureValidatorData.balanceProof,
+            fixtureValidatorData.index,
             uint64(vm.getBlockTimestamp() - timestampAge)
         );
 
-        assertEq(stakingPool.totalDeposits(), validatorData.balance);
+        uint256 balanceInWei = uint256(fixtureValidatorData.balance) * 1e9;
+        assertEq(stakingPool.totalDeposits(), balanceInWei);
     }
 
     function test_updateTotalDeposits_invalidTimestamp() public {
@@ -46,16 +47,16 @@ contract AccountingOracleTest is Base {
         accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
 
         // Timestamp is older then limit
-        mockEIP4788.setMockBeaconBlockRoot(validatorData.beaconBlockRoot);
+        mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
         vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
         accountingOracle.updateTotalDeposits(
-            validatorData.pubkey,
-            validatorData.pubkeyProof,
-            validatorData.balance,
-            validatorData.balancesLeaf,
-            validatorData.balanceProofs,
-            validatorData.index,
+            fixtureValidatorData.pubkey,
+            fixtureValidatorData.pubkeyProof,
+            fixtureValidatorData.balance,
+            fixtureValidatorData.balancesLeaf,
+            fixtureValidatorData.balanceProof,
+            fixtureValidatorData.index,
             uint64(block.timestamp - 10 minutes - 1 seconds)
         );
 
@@ -63,12 +64,12 @@ contract AccountingOracleTest is Base {
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
         vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
         accountingOracle.updateTotalDeposits(
-            validatorData.pubkey,
-            validatorData.pubkeyProof,
-            validatorData.balance,
-            validatorData.balancesLeaf,
-            validatorData.balanceProofs,
-            validatorData.index,
+            fixtureValidatorData.pubkey,
+            fixtureValidatorData.pubkeyProof,
+            fixtureValidatorData.balance,
+            fixtureValidatorData.balancesLeaf,
+            fixtureValidatorData.balanceProof,
+            fixtureValidatorData.index,
             uint64(block.timestamp + 1 seconds)
         );
     }
@@ -76,15 +77,15 @@ contract AccountingOracleTest is Base {
     function test_updateTotalDeposits_Fail_Paused() public {
         accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
 
-        mockEIP4788.setMockBeaconBlockRoot(validatorData.beaconBlockRoot);
+        mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         accountingOracle.updateTotalDeposits(
-            validatorData.pubkey,
-            validatorData.pubkeyProof,
-            validatorData.balance,
-            validatorData.balancesLeaf,
-            validatorData.balanceProofs,
-            validatorData.index,
+            fixtureValidatorData.pubkey,
+            fixtureValidatorData.pubkeyProof,
+            fixtureValidatorData.balance,
+            fixtureValidatorData.balancesLeaf,
+            fixtureValidatorData.balanceProof,
+            fixtureValidatorData.index,
             uint64(block.timestamp)
         );
     }

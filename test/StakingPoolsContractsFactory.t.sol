@@ -10,6 +10,7 @@ import { console2 } from "forge-std/console2.sol";
 import { Base } from "./base/Base.t.sol";
 import { MockBeaconImpl } from "./mock/MockBeaconImpl.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
+import { StakingPool } from "src/core/StakingPool.sol";
 
 contract StakingPoolsContractsFactoryTest is Base {
     enum BeaconType {
@@ -54,7 +55,7 @@ contract StakingPoolsContractsFactoryTest is Base {
     function test_deployStakingPoolContracts() public {
         vm.deal(address(this), type(uint256).max);
 
-        bytes memory pubkey = validatorData.pubkey;
+        bytes memory pubkey = fixtureValidatorData.pubkey;
         bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(address(withdrawalVault));
 
         StakingPoolContractsFactory.CoreContracts memory coreContracts =
@@ -70,8 +71,8 @@ contract StakingPoolsContractsFactoryTest is Base {
         );
 
         console2.log("withdrawalVault", address(withdrawalVault));
-        assertEq(address(withdrawalVault), validatorData.withdrawalAddress);
-        console2.log("validatorData.withdrawalAddress", validatorData.withdrawalAddress);
+        assertEq(address(withdrawalVault), fixtureValidatorData.withdrawalAddress);
+        console2.log("fixtureValidatorData.withdrawalAddress", fixtureValidatorData.withdrawalAddress);
 
         assertEq(smartOperator, coreContracts.smartOperator);
         assertEq(stakingPool, coreContracts.stakingPool);
@@ -88,7 +89,7 @@ contract StakingPoolsContractsFactoryTest is Base {
         address manager = makeAddr("manager");
         vm.expectRevert(StakingPoolContractsFactory.OperatorAlreadySet.selector);
         stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
-            validatorData.pubkey, withdrawalCredentials, _create96Byte(), manager, address(this)
+            fixtureValidatorData.pubkey, withdrawalCredentials, _create96Byte(), manager, address(this)
         );
     }
 
@@ -110,78 +111,67 @@ contract StakingPoolsContractsFactoryTest is Base {
     }
 
     function test_activateStakingPool() public {
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(validatorData.withdrawalAddress);
-        uint256 initialDepositAmount = 10_000 ether;
+        bytes memory withdrawalCredentials =
+            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
+        uint64 initialDepositAmountInGWei = 20_000 gwei;
 
+        StakingPoolContractsFactory.ValidatorData memory validatorData =
+            _helper_getValidatorData(initialDepositAmountInGWei);
+        StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
+
+        address stakingPool = address(_getStakingPool(fixtureValidatorData.pubkey));
         vm.expectEmit(true, true, true, true);
-        emit StakingPoolContractsFactory.StakingPoolActivated(address(_getStakingPool(validatorData.pubkey)));
-        stakingPoolContractsFactory.activateStakingPool(
-            validatorData.pubkey,
-            withdrawalCredentials,
-            validatorData.pubkeyProof,
-            validatorData.withdrawalCredentialsProof,
-            validatorData.index,
-            initialDepositAmount,
-            uint64(block.timestamp)
-        );
+        emit StakingPoolContractsFactory.StakingPoolActivated(stakingPool);
+        stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp));
+
+        StakingPool stakingPoolContract = StakingPool(payable(stakingPool));
+        assertEq(stakingPoolContract.totalDeposits(), uint256(initialDepositAmountInGWei) * 1e9);
     }
 
     function test_activateStakingPool_InvalidTimestamp() public {
-        _deployStakingPoolContracts(validatorData.pubkey);
-        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(validatorData.withdrawalAddress);
-        uint256 initialDepositAmount = 10_000 ether;
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
+        bytes memory withdrawalCredentials =
+            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
+        uint64 initialDepositAmountInGWei = 20_000 gwei;
 
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
+
+        StakingPoolContractsFactory.ValidatorData memory validatorData =
+            _helper_getValidatorData(initialDepositAmountInGWei);
+        StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
 
         // Timestamp is older then limit
         vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
         stakingPoolContractsFactory.activateStakingPool(
-            validatorData.pubkey,
-            withdrawalCredentials,
-            validatorData.pubkeyProof,
-            validatorData.withdrawalCredentialsProof,
-            validatorData.index,
-            initialDepositAmount,
-            uint64(block.timestamp - 10 minutes - 1 seconds)
+            validatorData, proofData, uint64(block.timestamp - 10 minutes - 1 seconds)
         );
 
         // Timestamp is the future
         vm.expectRevert(abi.encodeWithSelector(StakingPoolContractsFactory.InvalidTimestamp.selector));
-        stakingPoolContractsFactory.activateStakingPool(
-            validatorData.pubkey,
-            withdrawalCredentials,
-            validatorData.pubkeyProof,
-            validatorData.withdrawalCredentialsProof,
-            validatorData.index,
-            initialDepositAmount,
-            uint64(block.timestamp + 1 seconds)
-        );
+        stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp + 1 seconds));
     }
 
     function test_activateStakingPool_InvalidInitialDepositAmount() public {
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        bytes memory withdrawalCredentials = _helper_withdrawalAddressToCredentials(validatorData.withdrawalAddress);
-        uint256 initialDepositAmount = 100 ether;
+        bytes memory withdrawalCredentials =
+            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
+        uint64 initialDepositAmountInGWei = 100 gwei;
+
+        StakingPoolContractsFactory.ValidatorData memory validatorData =
+            _helper_getValidatorData(initialDepositAmountInGWei);
+        StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
 
         vm.expectRevert(StakingPoolContractsFactory.InvalidInitialDepositAmount.selector);
-        stakingPoolContractsFactory.activateStakingPool(
-            validatorData.pubkey,
-            withdrawalCredentials,
-            validatorData.pubkeyProof,
-            validatorData.withdrawalCredentialsProof,
-            validatorData.index,
-            initialDepositAmount,
-            uint64(block.timestamp)
-        );
+        stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp));
     }
 
     function testFuzz_upgradeBeaconImpl(uint8 beaconType) public {
         vm.assume(beaconType <= uint8(type(BeaconType).max));
 
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
         MockBeaconImpl mockImplementation = new MockBeaconImpl();
 
         BeaconType beacon = BeaconType(beaconType);
@@ -207,19 +197,24 @@ contract StakingPoolsContractsFactoryTest is Base {
 
     function _getBeaconImpl(BeaconType beacon) internal view returns (address) {
         if (beacon == BeaconType.SmartOperator) {
-            return _getBeaconImplementationAddressFromERC1967Proxy(address(_getSmartOperator(validatorData.pubkey)));
+            return _getBeaconImplementationAddressFromERC1967Proxy(
+                address(_getSmartOperator(fixtureValidatorData.pubkey))
+            );
         } else if (beacon == BeaconType.StakingPool) {
-            return _getBeaconImplementationAddressFromERC1967Proxy(address(_getStakingPool(validatorData.pubkey)));
-        } else if (beacon == BeaconType.StakingRewardsVault) {
             return
-                _getBeaconImplementationAddressFromERC1967Proxy(address(_getStakingRewardsVault(validatorData.pubkey)));
+                _getBeaconImplementationAddressFromERC1967Proxy(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        } else if (beacon == BeaconType.StakingRewardsVault) {
+            return _getBeaconImplementationAddressFromERC1967Proxy(
+                address(_getStakingRewardsVault(fixtureValidatorData.pubkey))
+            );
         } else if (beacon == BeaconType.WithdrawalRequestERC721) {
             return _getBeaconImplementationAddressFromERC1967Proxy(
-                address(_getWithdrawalRequestERC721(validatorData.pubkey))
+                address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey))
             );
         } else if (beacon == BeaconType.IncentiveCollector) {
-            return
-                _getBeaconImplementationAddressFromERC1967Proxy(address(_getIncentiveCollector(validatorData.pubkey)));
+            return _getBeaconImplementationAddressFromERC1967Proxy(
+                address(_getIncentiveCollector(fixtureValidatorData.pubkey))
+            );
         }
         revert("Unknown beacon");
     }
@@ -267,5 +262,28 @@ contract StakingPoolsContractsFactoryTest is Base {
         // credentials type 0x01 + 11 * 0x00 bytes
         uint96 withdrawalCredentialsPrefix = 0x010000000000000000000000;
         return abi.encodePacked(withdrawalCredentialsPrefix, withdrawalAddress);
+    }
+
+    function _helper_getValidatorData(uint64 initialDepositAmountInGWei)
+        internal
+        returns (StakingPoolContractsFactory.ValidatorData memory)
+    {
+        bytes memory withdrawalCredentials =
+            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
+        return StakingPoolContractsFactory.ValidatorData({
+            pubkey: fixtureValidatorData.pubkey,
+            withdrawalCredentials: withdrawalCredentials,
+            initialDepositAmount: initialDepositAmountInGWei,
+            validatorIndex: fixtureValidatorData.index
+        });
+    }
+
+    function _helper_getProofData() internal returns (StakingPoolContractsFactory.ProofData memory) {
+        return StakingPoolContractsFactory.ProofData({
+            pubkeyProof: fixtureValidatorData.pubkeyProof,
+            withdrawalCredentialsProof: fixtureValidatorData.withdrawalCredentialsProof,
+            initialDepositProof: fixtureValidatorData.balanceProof,
+            initialDepositProofLeaf: fixtureValidatorData.balancesLeaf
+        });
     }
 }

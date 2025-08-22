@@ -14,9 +14,9 @@ contract WithdrawalRequestERC721Test is Base {
     function setUp() public override {
         super.setUp();
 
-        _deployStakingPoolContracts(validatorData.pubkey);
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        withdrawalRequestERC721 = _getWithdrawalRequestERC721(validatorData.pubkey);
+        withdrawalRequestERC721 = _getWithdrawalRequestERC721(fixtureValidatorData.pubkey);
     }
 
     function testFuzz_requestWithdrawal(uint64 withdrawAmount) public {
@@ -24,7 +24,7 @@ contract WithdrawalRequestERC721Test is Base {
 
         uint256 amountInWei = uint256(withdrawAmount) * 1e9;
         vm.mockCall(
-            address(_getStakingPool(validatorData.pubkey)),
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
             abi.encode(amountInWei, false, false)
         );
@@ -53,7 +53,7 @@ contract WithdrawalRequestERC721Test is Base {
 
     function test_requestWithdrawal_FullExit() public {
         vm.mockCall(
-            address(_getStakingPool(validatorData.pubkey)),
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
             abi.encode(100 ether, true, false)
         );
@@ -88,7 +88,7 @@ contract WithdrawalRequestERC721Test is Base {
         vm.deal(address(withdrawalVault), requiredStBera);
 
         vm.mockCall(
-            address(_getSmartOperator(validatorData.pubkey)),
+            address(_getSmartOperator(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(SmartOperator.unboostedBalance.selector),
             abi.encode(0)
         );
@@ -136,7 +136,7 @@ contract WithdrawalRequestERC721Test is Base {
 
     function test_finalizeWithdrawalRequests() public {
         vm.mockCall(
-            address(_getStakingPool(validatorData.pubkey)),
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
             abi.encode(100 ether, false, false)
         );
