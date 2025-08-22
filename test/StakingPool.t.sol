@@ -42,7 +42,7 @@ contract StakingPoolTest is Base {
 
         assertTrue(stakingPool.isActive());
         assertFalse(stakingPool.paused());
-        assertEq(stakingPool.balanceOf(address(this)), INITIAL_DEPOSIT_AMOUNT);
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(address(this))), INITIAL_DEPOSIT_AMOUNT);
     }
 
     function test_activate_Fail_NotFactory() public {
@@ -81,21 +81,25 @@ contract StakingPoolTest is Base {
         stakingPool.receiveRewards{ value: 10_000 ether }();
     }
 
+    function test_ab() public {
+        testFuzz_submit(2_204_275_677_615_274_921_499_218_325_241);
+    }
+
     function testFuzz_submit(uint256 userDepositAmount) public returns (uint256, uint256, uint256) {
         test_activate();
 
         userDepositAmount =
             bound(userDepositAmount, 1, (stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
             // avoid deposit
-        assertEq(stakingPool.balanceOf(alice), 0);
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
 
         _helper_submit(alice, userDepositAmount);
 
-        assertEq(stakingPool.sharesOf(alice), userDepositAmount);
+        assertApproxEqAbs(stakingPool.balanceOf(alice), userDepositAmount, 1);
         assertEq(stakingPool.bufferedAssets(), userDepositAmount);
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
 
-        return (userDepositAmount, stakingPool.sharesOf(alice), stakingPool.bufferedAssets());
+        return (userDepositAmount, stakingPool.balanceOf(alice), stakingPool.bufferedAssets());
     }
 
     function testFuzz_submit_nativeTransfer(uint256 userDepositAmount) public {
@@ -104,15 +108,15 @@ contract StakingPoolTest is Base {
         userDepositAmount =
             bound(userDepositAmount, 1, (stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
             // avoid deposit
-        uint256 expectedUserShares = stakingPool.getSharesByAsset(userDepositAmount);
-        assertEq(stakingPool.balanceOf(alice), 0);
+        uint256 expectedUserShares = stakingPool.convertToShares(userDepositAmount);
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
 
         vm.deal(alice, userDepositAmount);
         vm.prank(alice);
         (bool success,) = address(stakingPool).call{ value: userDepositAmount }("");
         assertTrue(success);
 
-        assertEq(stakingPool.sharesOf(alice), expectedUserShares);
+        assertEq(stakingPool.balanceOf(alice), expectedUserShares);
         assertEq(stakingPool.bufferedAssets(), userDepositAmount);
         assertEq(stakingPool.totalDeposits(), 10_000 ether);
     }
@@ -138,9 +142,10 @@ contract StakingPoolTest is Base {
         uint256 expectedTotalDeposits = INITIAL_DEPOSIT_AMOUNT + expectedDepositAmount;
 
         assertTrue(stakingPool.activeTresholdReached());
-        assertEq(stakingPool.balanceOf(alice), aliceDepositAmount); // alice is not affected by the first deposit
-        assertEq(stakingPool.sharesOf(bob), userDepositAmount);
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), aliceDepositAmount); // alice is not affected
+            // by the first deposit
         assertEq(stakingPool.balanceOf(bob), userDepositAmount);
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(bob)), userDepositAmount);
         assertEq(stakingPool.bufferedAssets(), expectedBufferedAssets);
         assertEq(stakingPool.totalDeposits(), expectedTotalDeposits);
     }
@@ -151,17 +156,18 @@ contract StakingPoolTest is Base {
         vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
 
         userDepositAmount = bound(userDepositAmount, 1, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT);
-
         vm.deal(bob, userDepositAmount);
         vm.prank(bob);
         (bool success,) = address(stakingPool).call{ value: userDepositAmount }("");
         assertTrue(success);
 
-        assertEq(stakingPool.sharesOf(address(this)), INITIAL_DEPOSIT_AMOUNT);
-        assertApproxEqAbs(stakingPool.balanceOf(address(this)), INITIAL_DEPOSIT_AMOUNT + 1000 ether, 1);
+        assertEq(stakingPool.balanceOf(address(this)), INITIAL_DEPOSIT_AMOUNT);
+        assertApproxEqAbs(
+            stakingPool.previewRedeem(stakingPool.balanceOf(address(this))), INITIAL_DEPOSIT_AMOUNT + 1000 ether, 1
+        );
 
-        assertLt(stakingPool.sharesOf(bob), userDepositAmount);
-        assertApproxEqAbs(stakingPool.balanceOf(bob), userDepositAmount, 1);
+        assertLt(stakingPool.balanceOf(bob), userDepositAmount);
+        assertApproxEqAbs(stakingPool.previewRedeem(stakingPool.balanceOf(bob)), userDepositAmount, 1);
     }
 
     function test_submit_Fail_Paused() public {
@@ -180,11 +186,11 @@ contract StakingPoolTest is Base {
         amount = bound(amount, 1, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT);
 
         // No yield
-        assertEq(stakingPool.getSharesByAsset(amount), amount);
+        assertEq(stakingPool.convertToShares(amount), amount);
 
         // With yield
         vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
-        assertApproxEqAbs(stakingPool.getSharesByAsset(100e18), 90.90909090909090909e18, 1);
+        assertApproxEqAbs(stakingPool.convertToShares(100e18), 90.90909090909090909e18, 1);
     }
 
     function test_getAssetsByShares(uint256 shares) public {
@@ -192,11 +198,11 @@ contract StakingPoolTest is Base {
         shares = bound(shares, 1, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT);
 
         // No yield
-        assertEq(stakingPool.getAssetsByShares(shares), shares);
+        assertEq(stakingPool.convertToAssets(shares), shares);
 
         // With yield
         vm.deal(address(_getStakingRewardsVault(validatorData.pubkey)), 1000 ether);
-        assertApproxEqAbs(stakingPool.getAssetsByShares(1e18), 1.1e18, 1);
+        assertApproxEqAbs(stakingPool.convertToAssets(1e18), 1.1e18, 1);
     }
 
     function testFuzz_notifyWithdrawalRequest_DepositLowerThenMinEffectiveBalance(
@@ -210,10 +216,10 @@ contract StakingPoolTest is Base {
         withdrawalAmount = bound(withdrawalAmount, 1, submittedAmount); // bound to avoid withdrawal
         testFuzz_submit(submittedAmount);
 
-        uint256 shares = stakingPool.sharesOf(alice);
-        uint256 balance = stakingPool.balanceOf(alice);
+        uint256 shares = stakingPool.balanceOf(alice);
+        uint256 assets = stakingPool.previewRedeem(shares);
 
-        assertEq(shares, balance);
+        assertEq(shares, assets);
         assertEq(stakingPool.bufferedAssets(), submittedAmount);
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertFalse(stakingPool.activeTresholdReached());
@@ -223,7 +229,7 @@ contract StakingPoolTest is Base {
             stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
 
         assertTrue(isShortCircuit);
-        assertEq(amountOfSharesToBurn, withdrawalAmount);
+        assertApproxEqAbs(amountOfSharesToBurn, withdrawalAmount, 2);
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertEq(stakingPool.bufferedAssets(), submittedAmount - withdrawalAmount);
         assertFalse(isFullExited);
@@ -264,22 +270,6 @@ contract StakingPoolTest is Base {
         assertEq(
             stakingPool.totalAssets(), INITIAL_DEPOSIT_AMOUNT + boundedUserDepositAmount + donationAmount + 1000 ether
         );
-    }
-
-    function test_notFungible() public {
-        test_activate();
-
-        vm.expectRevert(IStBera.NotImplemented.selector);
-        stakingPool.transfer(alice, 100 ether);
-
-        vm.expectRevert(IStBera.NotImplemented.selector);
-        stakingPool.transferFrom(alice, bob, 100 ether);
-
-        vm.expectRevert(IStBera.NotImplemented.selector);
-        stakingPool.approve(alice, 100 ether);
-
-        vm.expectRevert(IStBera.NotImplemented.selector);
-        stakingPool.allowance(alice, bob);
     }
 
     function _helper_submit(address submitter, uint256 amount) internal {

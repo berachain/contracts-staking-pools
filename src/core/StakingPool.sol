@@ -104,11 +104,6 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
 
     // GETTERS
 
-    /// @inheritdoc IStakingPool
-    function totalAssets() external view returns (uint256) {
-        return _getTotalAssets();
-    }
-
     function getValidatorPubkey() external view returns (bytes memory) {
         return _pubkey;
     }
@@ -141,7 +136,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool, bool) {
         _validateSender(_withdrawalRequestERC721);
 
-        uint256 amountOfSharesToBurn = getSharesByAsset(assets);
+        uint256 amountOfSharesToBurn = previewWithdraw(assets);
         _burnShares(user, amountOfSharesToBurn);
 
         // Short circuit withdrawal request if buffered assets are enough to cover the request and active treshold is
@@ -210,7 +205,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
             _computeDepositAmounts(msg.value);
 
         if (userDepositAmount > 0) {
-            shares = getSharesByAsset(userDepositAmount);
+            shares = previewDeposit(userDepositAmount);
             _mintShares(msg.sender, shares);
         }
 
@@ -224,7 +219,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
             // Deposit contract accept only multiple of 1 gwei as deposit amount.
             // Round down to nearest gwei and deposit
             uint256 depositAmount = (bufferedAssets / 1 gwei) * 1 gwei;
-            _deposit(depositAmount);
+            _depositToConsensusLayer(depositAmount);
 
             // Leave the remaining amount in the buffer.
             bufferedAssets -= depositAmount;
@@ -241,7 +236,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     }
 
     /// @dev Deposits the given amount to CL.
-    function _deposit(uint256 amount) internal {
+    function _depositToConsensusLayer(uint256 amount) internal {
         bytes memory _withdrawalCredentials = abi.encodePacked(bytes1(0x01), bytes11(0x0), _withdrawalVault);
         bytes memory _emptySignature = abi.encodePacked(bytes32(0), bytes32(0), bytes32(0));
 

@@ -84,8 +84,6 @@ contract WithdrawalRequestERC721 is
         revert NonTransferable();
     }
 
-    // IWithdrawalRequestERC721
-
     /// @inheritdoc IWithdrawalRequestERC721
     function requestWithdrawal(uint64 assetsInGWei, uint256 maxFeeToPay) external payable {
         // Zero means full exit.

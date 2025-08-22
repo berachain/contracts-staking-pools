@@ -1,83 +1,91 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.30;
 
-import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { FixedPointMathLib } from "@solady/src/utils/FixedPointMathLib.sol";
+import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { IStBera } from "src/interfaces/IStBera.sol";
 
-abstract contract StBERA is IStBera, IERC20 {
+/**
+ * @title StBERA
+ * @notice Abstract base contract for the Staked BERA (stBERA) token implementation
+ * @dev This contract provides the core functionality for a staking pool token that allows users
+ * to deposit BERA tokens and receive stBERA shares representing their proportional ownership
+ * of the staking pool's total assets.
+ */
+abstract contract StBERA is IStBera {
+    using Math for uint256;
+
     // STORAGE
 
+    /// @dev Total number of shares currently in circulation
     uint256 internal _totalShares;
-    mapping(address => uint256) private _shares;
-    mapping(address => mapping(address => uint256)) private _allowances; // Currently unused, just storage placeholder
 
-    /// @dev Storage gap for future upgrades.
+    /// @dev Mapping from account addresses to their share balances
+    mapping(address => uint256) private _shares;
+
+    /// @dev Mapping for ERC20 allowances (currently unused, storage placeholder)
+    mapping(address => mapping(address => uint256)) private _allowances;
+
+    /// @dev Storage gap for future upgrades to prevent storage collision
     uint256[50] private _gap;
 
+    /// @inheritdoc IStBera
     function name() public pure virtual returns (string memory) {
-        // REVIEW: This should be specific for the staking pool. Maybe having the validator pubkey in the name?
         return "Staked BERA";
     }
 
+    /// @inheritdoc IStBera
     function symbol() public pure virtual returns (string memory) {
-        // REVIEW: This as well?
         return "stBERA";
     }
 
+    /// @inheritdoc IStBera
     function decimals() public pure virtual returns (uint8) {
         return 18;
     }
 
-    function totalShares() public view returns (uint256) {
-        return _totalShares;
-    }
-
-    function totalSupply() public view virtual override(IERC20, IStBera) returns (uint256) {
+    /// @inheritdoc IStBera
+    function totalAssets() public view returns (uint256) {
         return _getTotalAssets();
     }
 
-    function balanceOf(address account) public view virtual override(IERC20, IStBera) returns (uint256) {
-        return getAssetsByShares(_sharesOf(account));
+    /// @inheritdoc IStBera
+    function totalSupply() public view virtual override returns (uint256) {
+        return _totalShares;
     }
 
-    function sharesOf(address account) external view returns (uint256) {
-        return _sharesOf(account);
+    /// @inheritdoc IStBera
+    function balanceOf(address account) public view virtual override returns (uint256) {
+        return _shares[account];
     }
 
-    function getSharesByAsset(uint256 assetAmount) public view returns (uint256) {
-        return FixedPointMathLib.fullMulDiv(assetAmount, _totalShares, _getTotalAssets());
+    /// @inheritdoc IStBera
+    function convertToShares(uint256 assets) public view virtual returns (uint256) {
+        return _convertToShares(assets, Math.Rounding.Floor);
     }
 
-    function getAssetsByShares(uint256 sharesAmount) public view returns (uint256) {
-        return FixedPointMathLib.fullMulDiv(sharesAmount, _getTotalAssets(), _totalShares);
+    /// @inheritdoc IStBera
+    function convertToAssets(uint256 shares) public view virtual returns (uint256) {
+        return _convertToAssets(shares, Math.Rounding.Floor);
     }
 
-    // IERC20 FUNCTIONS
-
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
-        to;
-        amount;
-        revert NotImplemented();
+    /// @inheritdoc IStBera
+    function previewDeposit(uint256 assets) public view virtual returns (uint256) {
+        return _convertToShares(assets, Math.Rounding.Floor);
     }
 
-    function transferFrom(address from, address to, uint256 amount) public virtual override returns (bool) {
-        from;
-        to;
-        amount;
-        revert NotImplemented();
+    /// @inheritdoc IStBera
+    function previewMint(uint256 shares) public view virtual returns (uint256) {
+        return _convertToAssets(shares, Math.Rounding.Ceil);
     }
 
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        owner;
-        spender;
-        revert NotImplemented();
+    /// @inheritdoc IStBera
+    function previewWithdraw(uint256 assets) public view virtual returns (uint256) {
+        return _convertToShares(assets, Math.Rounding.Ceil);
     }
 
-    function approve(address spender, uint256 amount) public virtual override returns (bool) {
-        spender;
-        amount;
-        revert NotImplemented();
+    /// @inheritdoc IStBera
+    function previewRedeem(uint256 shares) public view virtual returns (uint256) {
+        return _convertToAssets(shares, Math.Rounding.Ceil);
     }
 
     // INTERNAL FUNCTIONS
@@ -85,11 +93,12 @@ abstract contract StBERA is IStBera, IERC20 {
     /// @dev Returns the total amount of assets managed by the staking pool.
     function _getTotalAssets() internal view virtual returns (uint256);
 
-    /// @dev Returns the amount of shares owned by `account`.
-    function _sharesOf(address account) internal view returns (uint256) {
-        return _shares[account];
-    }
-
+    /**
+     * @dev Mints new shares to a recipient account
+     * @param recipient The address to receive the newly minted shares
+     * @param sharesAmount The number of shares to mint
+     * @return The new total balance of shares for the recipient
+     */
     function _mintShares(address recipient, uint256 sharesAmount) internal returns (uint256) {
         if (recipient == address(0)) {
             revert AddressZero();
@@ -101,16 +110,54 @@ abstract contract StBERA is IStBera, IERC20 {
         return _shares[recipient];
     }
 
+    /**
+     * @dev Burns shares from an account
+     * @param account The address from which shares are burned
+     * @param sharesAmount The number of shares to burn
+     */
     function _burnShares(address account, uint256 sharesAmount) internal {
         if (account == address(0)) {
             revert AddressZero();
         }
-        if (_sharesOf(account) < sharesAmount) {
+        if (_shares[account] < sharesAmount) {
             revert InsufficientShares();
         }
 
         _shares[account] -= sharesAmount;
         _totalShares -= sharesAmount;
         emit SharesBurned(account, sharesAmount);
+    }
+
+    /**
+     * @dev Converts shares to assets using the current exchange rate
+     * @param shares The number of shares to convert
+     * @param rounding The rounding mode to use for calculations
+     * @return The equivalent amount of assets
+     * @dev Taken from
+     * 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/9904c19522c6c77a010641c2576c95ce9d419635/contracts/token/ERC20/extensions/ERC4626.sol#L232'.
+     */
+    function _convertToAssets(uint256 shares, Math.Rounding rounding) internal view returns (uint256) {
+        return shares.mulDiv(totalAssets() + 1, totalSupply() + 10 ** _decimalsOffset(), rounding);
+    }
+
+    /**
+     * @dev Converts assets to shares using the current exchange rate
+     * @param assets The amount of assets to convert
+     * @param rounding The rounding mode to use for calculations
+     * @return The equivalent number of shares
+     * @dev Taken from
+     * 'https://github.com/OpenZeppelin/openzeppelin-contracts/blob/9904c19522c6c77a010641c2576c95ce9d419635/contracts/token/ERC20/extensions/ERC4626.sol#L225'.
+     */
+    function _convertToShares(uint256 assets, Math.Rounding rounding) internal view returns (uint256) {
+        return assets.mulDiv(totalSupply() + 10 ** _decimalsOffset(), totalAssets() + 1, rounding);
+    }
+
+    /**
+     * @dev Returns the decimals offset used in conversion calculations
+     * @return The number of decimal places to offset in calculations
+     * Default implementation returns 0, but can be overridden for different precision requirements.
+     */
+    function _decimalsOffset() internal view virtual returns (uint8) {
+        return 0;
     }
 }

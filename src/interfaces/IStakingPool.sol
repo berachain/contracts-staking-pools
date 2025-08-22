@@ -28,10 +28,6 @@ interface IStakingPool {
 
     // GETTERS
 
-    /// @notice Returns the total assets of the staking pool.
-    /// @return totalAssets_ The amount of assets.
-    function totalAssets() external view returns (uint256 totalAssets_);
-
     /// @notice Returns true if the staking pool has been dismissed.
     function isFullExited() external view returns (bool);
 
