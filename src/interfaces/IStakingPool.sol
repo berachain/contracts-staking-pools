@@ -90,8 +90,15 @@ interface IStakingPool {
     /// - collect rewards from the staking rewards vault if needed
     /// - deposit to CL if minimum threshold is met
     /// - pause deposits if maximum capacity is reached
+    /// @param receiver The address to mint the shares to.
     /// @return shares The amount of stBERA shares minted to the depositor.
-    function submit() external payable returns (uint256 shares);
+    function submit(address receiver) external payable returns (uint256 shares);
+
+    /// @notice Mints shares to the default shares recipient.
+    /// @dev Can only be called by the smart operator.
+    /// @dev This function is used to mint shares to the validator instead of accruing fees.
+    /// @param amount The amount of assets to mint.
+    function mintFeeShares(uint256 amount) external;
 
     // PAUSABLE
 

@@ -2,13 +2,13 @@
 pragma solidity ^0.8.30;
 
 import { Base } from "./base/Base.t.sol";
-import { SmartOperator, ISmartOperator } from "src/core/SmartOperator.sol";
+import { SmartOperator } from "src/core/SmartOperator.sol";
+import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
-import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 
 contract SmartOperatorTest is Base {
     SmartOperator smartOperator;
@@ -167,12 +167,12 @@ contract SmartOperatorTest is Base {
 
         vm.mockCall(
             address(_getIncentiveCollector(fixtureValidatorData.pubkey)),
-            abi.encodeWithSelector(IncentiveCollector.setPayoutAmount.selector),
+            abi.encodeWithSelector(IncentiveCollector.queuePayoutAmountChange.selector),
             abi.encode(100_000 ether)
         );
 
         vm.prank(incentiveCollectorManager);
-        smartOperator.setIncentiveCollectorPayoutAmount(100_000 ether);
+        smartOperator.queueIncentiveCollectorPayoutAmountChange(100_000 ether);
     }
 
     function test_setIncentiveCollectorPayoutAmount_Fail_NotIncentiveCollectorManager() public {
@@ -189,7 +189,7 @@ contract SmartOperatorTest is Base {
                 incentiveCollectorManagerRole
             )
         );
-        smartOperator.setIncentiveCollectorPayoutAmount(100_000 ether);
+        smartOperator.queueIncentiveCollectorPayoutAmountChange(100_000 ether);
     }
 
     function test_setProtocolFeePercentage() public {
@@ -231,8 +231,8 @@ contract SmartOperatorTest is Base {
         address receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit ISmartOperator.BGTRedeemed(receiver, 100 ether, 0);
-        smartOperator.redeem(receiver);
+        emit ISmartOperator.BGTRedeemed(receiver, 100 ether);
+        smartOperator.fullExitRedeemBGT(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
         assertEq(address(receiver).balance, 100 ether);
@@ -249,35 +249,33 @@ contract SmartOperatorTest is Base {
         vm.prank(validatorFeeManager);
         smartOperator.setProtocolFeePercentage(1000); // 10%
 
-        assertEq(smartOperator.baseRateChargedFees(), 0);
-
         uint256 snapshot = vm.snapshotState();
 
         address receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit ISmartOperator.BGTRedeemed(receiver, 100 ether, 0);
-        smartOperator.redeem(receiver);
+        emit ISmartOperator.BGTRedeemed(receiver, 100 ether);
+        smartOperator.fullExitRedeemBGT(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
         assertEq(address(receiver).balance, 100 ether);
-        assertEq(address(smartOperator).balance, 0);
+        assertEq(stakingPool.balanceOf(address(this)), 0);
 
         vm.revertToState(snapshot);
 
         mockBGT.mint(address(smartOperator), 100 ether);
 
+        uint256 expectedFeeSharesMinted = stakingPool.previewDeposit(10 ether); // 10% of 100 ether
+
         receiver = makeAddr("receiver");
         vm.prank(address(withdrawalRequestERC721));
         vm.expectEmit(true, true, true, true);
-        emit ISmartOperator.BGTRedeemed(receiver, 190 ether, 10 ether);
-        smartOperator.redeem(receiver);
+        emit ISmartOperator.BGTRedeemed(receiver, 200 ether);
+        smartOperator.fullExitRedeemBGT(receiver);
 
         assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
-        assertEq(address(receiver).balance, 190 ether);
-        assertEq(address(smartOperator).balance, 10 ether);
-
-        assertEq(smartOperator.baseRateChargedFees(), 0);
+        assertEq(address(receiver).balance, 200 ether);
+        assertEq(stakingPool.balanceOf(address(this)), expectedFeeSharesMinted);
     }
 
     function test_setMinEffectiveBalance() public {
@@ -294,5 +292,29 @@ contract SmartOperatorTest is Base {
         );
         vm.prank(notAdmin);
         smartOperator.setMinEffectiveBalance(300_000 ether);
+    }
+
+    function test_queueBoost() public {
+        // Mint some BGT to smart operator
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        // Queue boost should succeed and return true
+        assertTrue(smartOperator.queueBoost());
+
+        // Verify boost was queued
+        (uint32 blockNumberLast, uint128 balance) =
+            mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        assertEq(balance, 100 ether);
+        assertEq(blockNumberLast, block.number);
+    }
+
+    function test_queueBoost_Fail_StakingPoolFullExited() public {
+        // set isFullExited to true
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(64))));
+        uint256 newValue = currentValue | (1 << 8);
+        vm.store(address(stakingPool), bytes32(uint256(64)), bytes32(newValue));
+
+        vm.expectRevert(ISmartOperator.StakingPoolIsFullExited.selector);
+        smartOperator.queueBoost();
     }
 }

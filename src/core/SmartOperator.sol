@@ -2,20 +2,17 @@
 pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
-import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
-import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 
-contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgradeable {
+contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
     // CONSTANTS
 
@@ -29,6 +26,9 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
 
     /// @dev Validator admin manages other roles and is managed by the contract owner.
     bytes32 public constant VALIDATOR_ADMIN_ROLE = keccak256("VALIDATOR_ADMIN_ROLE");
+
+    /// @dev Can unboost and redeem BGT.
+    bytes32 public constant BGT_MANAGER_ROLE = keccak256("BGT_MANAGER_ROLE");
 
     /// @dev Can set the fee percentage and claim fees.
     bytes32 public constant PROTOCOL_FEE_MANAGER_ROLE = keccak256("PROTOCOL_FEE_MANAGER_ROLE");
@@ -54,12 +54,10 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
     address internal _stakingPool;
     address internal _incentiveCollector;
     address internal _withdrawalRequestERC721;
+    address internal _stakingRewardsVault;
+    uint256 internal _bgtBalanceAlreadyCharged;
 
     uint96 public protocolFeePercentage;
-    uint256 public baseRateChargedFees;
-    uint256 internal _baseRateAlreadyCharged;
-
-    receive() external payable { }
 
     constructor() {
         _disableInitializers();
@@ -75,7 +73,6 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         initializer
     {
         __AccessControl_init();
-        __Pausable_init();
 
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(VALIDATOR_ADMIN_ROLE, validatorAdmin);
@@ -92,10 +89,15 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         _stakingPool = contracts.stakingPool;
         _incentiveCollector = contracts.incentiveCollector;
         _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
+        _stakingRewardsVault = contracts.stakingRewardsVault;
     }
 
     /// @inheritdoc ISmartOperator
-    function queueBoost() external whenNotPaused returns (bool) {
+    function queueBoost() external returns (bool) {
+        if (IStakingPool(_stakingPool).isFullExited()) {
+            revert StakingPoolIsFullExited();
+        }
+
         (, uint128 queuedBalance) = BGT.boostedQueue(address(this), _pubkey);
         if (queuedBalance == 0) {
             uint256 amount = BGT.unboostedBalanceOf(address(this));
@@ -110,15 +112,24 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         BGT.activateBoost(address(this), _pubkey);
     }
 
+    function queueDropBoost(uint128 amount) external onlyRole(BGT_MANAGER_ROLE) {
+        BGT.queueDropBoost(_pubkey, uint128(amount));
+    }
+
     /// @inheritdoc ISmartOperator
-    function queueDropBoost() external {
+    function fullExitQueueDropBoost() external {
         _validateSender(_stakingPool);
         _cancelQueueBoost();
+
         uint128 amount = BGT.boosted(address(this), _pubkey);
         if (amount > 0) {
             BGT.queueDropBoost(_pubkey, uint128(amount));
         }
-        _pause();
+
+        _updateEarnedBGTFees();
+        // Reset already charged amount
+        // Resetting state here is safe since any BGT donated/received after this point won't affect accounting.
+        _bgtBalanceAlreadyCharged = 0;
     }
 
     /// @inheritdoc ISmartOperator
@@ -126,26 +137,35 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         BGT.dropBoost(address(this), _pubkey);
     }
 
+    function redeemBGT(uint256 amount) external onlyRole(BGT_MANAGER_ROLE) {
+        if (IStakingPool(_stakingPool).isFullExited()) {
+            revert StakingPoolIsFullExited();
+        }
+
+        _updateEarnedBGTFees();
+
+        BGT.redeem(_stakingRewardsVault, amount);
+        emit BGTRedeemed(_stakingRewardsVault, amount);
+
+        // Update the base rate charged to match current BGT balance to prevent double fee charging.
+        // When BGTs are redeemed, they are burned and the equivalent BERA is deposited into the staking pool.
+        // Since this deposit is already accounted as yield and had fees charged, we update the base rate
+        // to avoid charging fees again on the same amount in future calculations.
+        _bgtBalanceAlreadyCharged = BGT.balanceOf(address(this));
+    }
+
     /// @inheritdoc ISmartOperator
-    function redeem(address receiver) external {
+    function fullExitRedeemBGT(address receiver) external {
         _validateSender(_withdrawalRequestERC721);
+
+        // Complete any queued drop boost.
+        BGT.dropBoost(address(this), _pubkey);
+
         uint256 balance = BGT.balanceOf(address(this));
 
         if (balance > 0) {
-            _updateBaseRateChargedFees();
-
-            BGT.redeem(address(this), balance);
-
-            SafeTransferLib.safeTransferETH(receiver, balance - baseRateChargedFees);
-
-            emit BGTRedeemed(receiver, balance - baseRateChargedFees, baseRateChargedFees);
-
-            // Reset base rate charged fees and already charged amount
-            // Successful redeem (balance > 0) represents a terminal state for the staking pool and triggered only
-            // after a full exit.
-            // Resetting state here is safe since any BGT donated/received after this point won't affect accounting.
-            baseRateChargedFees = 0;
-            _baseRateAlreadyCharged = 0;
+            BGT.redeem(receiver, balance);
+            emit BGTRedeemed(receiver, balance);
         }
     }
 
@@ -166,15 +186,51 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
     }
 
     /// @inheritdoc ISmartOperator
-    function getStakerRewards() external returns (uint256) {
-        uint256 rewards = _getStakerRewards();
+    function rebaseableBgtAmount() external view returns (uint256) {
+        uint256 balance = BGT.balanceOf(address(this));
+        uint256 chargableBgtBalance = balance - _bgtBalanceAlreadyCharged;
+        return balance - _computeFee(chargableBgtBalance);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function unboostedBalance() external view returns (uint256) {
+        return BGT.unboostedBalanceOf(address(this));
+    }
+
+    /// @inheritdoc ISmartOperator
+    function getEarnedBGTFeeState()
+        external
+        view
+        returns (uint256 currentBalance, uint256 bgtBalanceAlreadyCharged, uint256 chargeableBalance, uint96)
+    {
+        currentBalance = BGT.balanceOf(address(this));
+        bgtBalanceAlreadyCharged = _bgtBalanceAlreadyCharged;
+
+        if (currentBalance > bgtBalanceAlreadyCharged) {
+            chargeableBalance = currentBalance - bgtBalanceAlreadyCharged;
+        }
+
+        return (currentBalance, bgtBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function queueIncentiveCollectorPayoutAmountChange(uint256 newPayoutAmount)
+        external
+        onlyRole(INCENTIVE_COLLECTOR_MANAGER_ROLE)
+    {
+        IIncentiveCollector(_incentiveCollector).queuePayoutAmountChange(newPayoutAmount);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function claimBgtStakerReward() external returns (uint256) {
+        uint256 rewards = _claimBgtStakerReward();
         IERC20(HONEY_TOKEN).transfer(_incentiveCollector, rewards);
         return rewards;
     }
 
     /// @inheritdoc ISmartOperator
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
-        _getStakerRewards();
+        _claimBgtStakerReward();
 
         if (claims.length > 0) {
             BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
@@ -191,28 +247,8 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
     }
 
     /// @inheritdoc ISmartOperator
-    function rebaseableBgtAmount() external view returns (uint256) {
-        uint256 chargableBgtBalance = BGT.balanceOf(address(this)) - _baseRateAlreadyCharged;
-        return BGT.balanceOf(address(this)) - baseRateChargedFees - _computeFee(chargableBgtBalance);
-    }
-
-    /// @inheritdoc ISmartOperator
-    function unboostedBalance() external view returns (uint256) {
-        return BGT.unboostedBalanceOf(address(this));
-    }
-
-    /// @inheritdoc ISmartOperator
     function setMinEffectiveBalance(uint256 minEffectiveBalance) external onlyRole(DEFAULT_ADMIN_ROLE) {
         IStakingPool(_stakingPool).setMinEffectiveBalance(minEffectiveBalance);
-    }
-
-    /// @notice Sets the payout amount for the incentive collector.
-    /// @param payoutAmount The amount of payout to set for the incentive collector.
-    function setIncentiveCollectorPayoutAmount(uint256 payoutAmount)
-        external
-        onlyRole(INCENTIVE_COLLECTOR_MANAGER_ROLE)
-    {
-        IIncentiveCollector(_incentiveCollector).setPayoutAmount(payoutAmount);
     }
 
     /// @notice Sets the protocol fee percentage for the smart operator.
@@ -227,29 +263,30 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         }
 
         // Update base rate charged fees before the protocol fee percentage is changed
-        _updateBaseRateChargedFees();
+        _updateEarnedBGTFees();
 
         protocolFeePercentage = protocolFeePercentage_;
         emit ProtocolFeePercentageSet(protocolFeePercentage_);
     }
 
     /// @inheritdoc ISmartOperator
-    function collectProtocolFee(uint256 amount, address receiver) external onlyRole(PROTOCOL_FEE_MANAGER_ROLE) {
-        if (amount > address(this).balance) {
-            revert InvalidAmount();
-        }
-
-        SafeTransferLib.safeTransferETH(receiver, amount);
-
-        emit ProtocolFeeCollected(amount, receiver);
+    function accrueEarnedBGTFees() external {
+        _updateEarnedBGTFees();
+        // Update the base rate charged to match current BGT balance to prevent double fee charging.
+        // When BGTs are redeemed, they are burned and the equivalent BERA is deposited into the staking pool.
+        // Since this deposit is already accounted as yield and had fees charged, we update the base rate
+        // to avoid charging fees again on the same amount in future calculations.
+        _bgtBalanceAlreadyCharged = BGT.balanceOf(address(this));
     }
 
     /// @inheritdoc ISmartOperator
-    function computeFee(uint256 amount) external view returns (uint256) {
-        return _computeFee(amount);
+    function accrueIncentivesFees(uint256 amount) external {
+        _validateSender(_incentiveCollector);
+        _accountFees(amount);
     }
 
-    function _getStakerRewards() internal returns (uint256) {
+    /// @dev Claims BGTStaker rewards
+    function _claimBgtStakerReward() internal returns (uint256) {
         uint256 rewards = BGT_STAKER.getReward();
         return rewards;
     }
@@ -277,10 +314,32 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable, PausableUpgr
         return (amount * protocolFeePercentage) / ONE_HUNDRED_PERCENT;
     }
 
-    function _updateBaseRateChargedFees() internal {
-        uint256 balance = BGT.balanceOf(address(this));
-        uint256 chargableBgtBalance = balance - _baseRateAlreadyCharged;
-        baseRateChargedFees += _computeFee(chargableBgtBalance);
-        _baseRateAlreadyCharged = balance;
+    /// @dev Updates and charges base rate fees on the chargeable BGT balance.
+    /// @dev Only charges fees on the difference between current balance and previously charged amount.
+    /// @dev Updates the base rate charged tracker to prevent double fee charging.
+    function _updateEarnedBGTFees() internal {
+        uint256 currentBalance = BGT.balanceOf(address(this));
+        uint256 chargeableBalance = currentBalance - _bgtBalanceAlreadyCharged;
+
+        // Early return if no new balance to charge fees on
+        if (chargeableBalance == 0) {
+            return;
+        }
+
+        // Compute and charge fees only if there's a protocol fee percentage set
+        if (protocolFeePercentage > 0) {
+            uint256 feeAmount = _computeFee(chargeableBalance);
+            _accountFees(feeAmount);
+        }
+
+        // Update the tracker to prevent double fee charging
+        _bgtBalanceAlreadyCharged = currentBalance;
+    }
+
+    /// @dev Mints shares to the validator instead of accruing fees.
+    function _accountFees(uint256 amount) internal {
+        if (amount > 0) {
+            IStakingPool(_stakingPool).mintFeeShares(amount);
+        }
     }
 }

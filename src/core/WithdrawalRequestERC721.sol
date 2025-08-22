@@ -170,7 +170,7 @@ contract WithdrawalRequestERC721 is
 
         // redeem BGTs alongside the first withdraw if the node is full exited
         if (_stakingPool.isFullExited()) {
-            try _smartOperator.redeem(address(_withdrawalVault)) { } catch { }
+            try _smartOperator.fullExitRedeemBGT(address(_withdrawalVault)) { } catch { }
         }
 
         if (request.assetsRequested > address(_withdrawalVault).balance) {

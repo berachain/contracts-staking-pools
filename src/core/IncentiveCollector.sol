@@ -11,9 +11,18 @@ import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 
 contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
+
+    // CONSTANTS
+
+    /// @dev 100% in basis points.
+    uint96 public constant ONE_HUNDRED_PERCENT = 1e4;
+
     // STORAGE
 
     uint256 public payoutAmount;
+    uint256 public queuedPayoutAmount;
+    uint96 public feePercentage;
+    uint96 public queuedFeePercentage;
     address internal _stakingPool;
     address internal _smartOperator;
     address internal _stakingRewardsVault;
@@ -50,10 +59,18 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
         emit PayoutAmountSet(0, _payoutAmount);
     }
 
-    function setPayoutAmount(uint256 _payoutAmount) external {
+    /// @inheritdoc IIncentiveCollector
+    function queuePayoutAmountChange(uint256 newPayoutAmount) external {
         _validateSender(_smartOperator);
-        emit PayoutAmountSet(payoutAmount, _payoutAmount);
-        payoutAmount = _payoutAmount;
+        if (newPayoutAmount == 0) revert PayoutAmountIsZero();
+        emit QueuedPayoutAmount(newPayoutAmount, payoutAmount);
+        queuedPayoutAmount = newPayoutAmount;
+    }
+
+    function queueFeePercentageChange(uint96 newFeePercentage) external {
+        _validateSender(_smartOperator);
+        emit QueuedFeePercentage(newFeePercentage, feePercentage);
+        queuedFeePercentage = newFeePercentage;
     }
 
     /// @inheritdoc IIncentiveCollector
@@ -80,16 +97,17 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
             }
         }
 
-        // Transfer fee to smart operator
-        uint256 fee = ISmartOperator(_smartOperator).computeFee(payoutAmount);
-        if (fee > 0) {
-            SafeTransferLib.safeTransferETH(_smartOperator, fee);
-        }
+        // Accrue fees to smart operator.
+        uint256 fee = _computeFee(payoutAmount);
+        ISmartOperator(_smartOperator).accrueIncentivesFees(fee);
 
-        // Transfer remaining payout to staking rewards vault
-        SafeTransferLib.safeTransferETH(_stakingRewardsVault, payoutAmount - fee);
+        // Transfer the payout to staking rewards vault.
+        SafeTransferLib.safeTransferETH(_stakingRewardsVault, payoutAmount);
 
-        emit IncentiveTokensClaimed(msg.sender, payoutAmount - fee, fee);
+        emit IncentiveTokensClaimed(msg.sender, payoutAmount, fee);
+
+        if (queuedPayoutAmount != 0) _setPayoutAmount();
+        if (queuedFeePercentage != 0) _setFeePercentage();
     }
 
     /// @inheritdoc IIncentiveCollector
@@ -112,5 +130,24 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
         if (msg.sender != expected) {
             revert InvalidSender(msg.sender, expected);
         }
+    }
+
+    /// @notice Set the payout amount to the queued payout amount
+    function _setPayoutAmount() internal {
+        emit PayoutAmountSet(payoutAmount, queuedPayoutAmount);
+        payoutAmount = queuedPayoutAmount;
+        queuedPayoutAmount = 0;
+    }
+
+    /// @notice Set the fee percentage to the queued fee percentage
+    function _setFeePercentage() internal {
+        emit FeePercentageSet(feePercentage, queuedFeePercentage);
+        feePercentage = queuedFeePercentage;
+        queuedFeePercentage = 0;
+    }
+
+    function _computeFee(uint256 amount) internal view returns (uint256) {
+        if (feePercentage == 0 || amount == 0) return 0;
+        return (amount * feePercentage) / ONE_HUNDRED_PERCENT;
     }
 }

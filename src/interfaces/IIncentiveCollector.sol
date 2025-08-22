@@ -14,6 +14,21 @@ interface IIncentiveCollector {
     /// @param newValue The new value for payout amount.
     event PayoutAmountSet(uint256 oldValue, uint256 newValue);
 
+    /// @notice Emitted when payout amount is queued by admin.
+    /// @param newPayoutAmount The new value for payout amount.
+    /// @param oldPayoutAmount The previous value for payout amount.
+    event QueuedPayoutAmount(uint256 newPayoutAmount, uint256 oldPayoutAmount);
+
+    /// @notice Emitted when fee percentage is set by admin.
+    /// @param oldValue The previous value for fee percentage.
+    /// @param newValue The new value for fee percentage.
+    event FeePercentageSet(uint96 oldValue, uint96 newValue);
+
+    /// @notice Emitted when fee percentage is queued by admin.
+    /// @param newFeePercentage The new value for fee percentage.
+    /// @param oldFeePercentage The previous value for fee percentage.
+    event QueuedFeePercentage(uint96 newFeePercentage, uint96 oldFeePercentage);
+
     /// @notice Emitted when one token is claimed.
     /// @param from The address of the claimer.
     /// @param token The address of the token.
@@ -36,6 +51,8 @@ interface IIncentiveCollector {
     error TransferFailed();
     // Signature: 0xb9bf4d31
     error NodeIsFullExited();
+    // Signature: 0x546c7600
+    error PayoutAmountIsZero();
 
     // FUNCTIONS
 
@@ -49,10 +66,16 @@ interface IIncentiveCollector {
     /// @custom:throws TransferFailed if transfer to staking rewards vault fails.
     function claim(address[] calldata tokens) external payable;
 
-    /// @notice Updates the payout amount required to claim incentives.
+    /// @notice Queues a payout amount change.
     /// @dev Admin function.
-    /// @param _payoutAmount The new payout amount in native tokens.
-    function setPayoutAmount(uint256 _payoutAmount) external;
+    /// @param newPayoutAmount The new payout amount in native tokens.
+    /// @custom:throws PayoutAmountIsZero if the new payout amount is zero.
+    function queuePayoutAmountChange(uint256 newPayoutAmount) external;
+
+    /// @notice Queues a fee percentage change.
+    /// @dev Admin function.
+    /// @param newFeePercentage The new fee percentage.
+    function queueFeePercentageChange(uint96 newFeePercentage) external;
 
     /// @notice Emergency function to recover ERC20 tokens from the incentive collector.
     /// @dev Callable only by the admin.

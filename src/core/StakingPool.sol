@@ -11,6 +11,8 @@ import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
+import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
+import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
 
 contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
@@ -197,17 +199,25 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
     /// @dev Default payable function redirects to deposit function.
     receive() external payable {
-        _submit();
+        _submit(msg.sender);
     }
 
     /// @inheritdoc IStakingPool
-    function submit() external payable returns (uint256) {
-        return _submit();
+    function submit(address receiver) external payable returns (uint256) {
+        return _submit(receiver);
+    }
+
+    /// @inheritdoc IStakingPool
+    function mintFeeShares(uint256 amount) external {
+        _validateSender(_smartOperator);
+
+        uint256 shares = previewDeposit(amount);
+        _mintShares(_defaultSharesRecipient, shares);
     }
 
     // INTERNAL FUNCTIONS
 
-    function _submit() internal whenNotPaused returns (uint256 shares) {
+    function _submit(address receiver) internal whenNotPaused returns (uint256 shares) {
         if (msg.value == 0) {
             revert InvalidAmount();
         }
@@ -217,7 +227,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
         if (userDepositAmount > 0) {
             shares = previewDeposit(userDepositAmount);
-            _mintShares(msg.sender, shares);
+            _mintShares(receiver, shares);
         }
 
         if (rewardsToCollect > 0) {
@@ -344,8 +354,8 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     /// @custom:emits FullExitTriggered when full exit is triggered
     /// @custom:throws TransferFailed if transfer to withdrawal vault fails
     function _triggerFullExit() internal {
-        ISmartOperator(_smartOperator).queueDropBoost();
-
+        ISmartOperator(_smartOperator).fullExitQueueDropBoost();
+        // Freeze total assets at current value after the drop boost is queued and base rate fees are updated.
         _frozenTotalAssets = _getTotalAssets();
 
         // Transfer buffered assets to the withdrawal vault

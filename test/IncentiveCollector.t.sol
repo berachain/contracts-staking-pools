@@ -8,10 +8,12 @@ import { MockHoney } from "./mock/MockHoney.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
+import { StakingPool } from "src/core/StakingPool.sol";
 
 contract IncentiveCollectorTest is Base {
     IncentiveCollector incentiveCollector;
     SmartOperator smartOperator;
+    StakingPool stakingPool;
 
     address[] incentiveTokens;
 
@@ -24,6 +26,7 @@ contract IncentiveCollectorTest is Base {
 
         incentiveCollector = _getIncentiveCollector(fixtureValidatorData.pubkey);
         smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
+        stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
 
         smartOperator.grantRole(smartOperator.INCENTIVE_COLLECTOR_MANAGER_ROLE(), incentiveCollectorManager);
         smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
@@ -57,14 +60,26 @@ contract IncentiveCollectorTest is Base {
     }
 
     function test_setPayoutAmount(uint256 payoutAmount) public {
+        vm.assume(payoutAmount > 0); // payoutAmount cannot be 0
         uint256 defaultPayoutAmount = incentiveCollector.payoutAmount();
         assertEq(defaultPayoutAmount, 100 ether); // default payout amount is 100 ether
 
         vm.prank(address(smartOperator));
         vm.expectEmit(true, true, true, true);
-        emit IIncentiveCollector.PayoutAmountSet(defaultPayoutAmount, payoutAmount);
-        incentiveCollector.setPayoutAmount(payoutAmount);
+        emit IIncentiveCollector.QueuedPayoutAmount(payoutAmount, defaultPayoutAmount);
+        incentiveCollector.queuePayoutAmountChange(payoutAmount);
 
+        // The payout amount should still be the default until the change is applied
+        assertEq(incentiveCollector.payoutAmount(), defaultPayoutAmount);
+
+        // Now trigger the payout amount change by calling claim
+        address claimer = makeAddr("claimer");
+        vm.deal(claimer, defaultPayoutAmount);
+
+        vm.prank(claimer);
+        incentiveCollector.claim{ value: defaultPayoutAmount }(incentiveTokens);
+
+        // After the claim, the payout amount should be updated
         assertEq(incentiveCollector.payoutAmount(), payoutAmount);
     }
 
@@ -75,7 +90,7 @@ contract IncentiveCollectorTest is Base {
         vm.expectRevert(
             abi.encodeWithSelector(IIncentiveCollector.InvalidSender.selector, invalidSender, address(smartOperator))
         );
-        incentiveCollector.setPayoutAmount(2);
+        incentiveCollector.queuePayoutAmountChange(2);
     }
 
     function test_claim() public {
@@ -114,42 +129,41 @@ contract IncentiveCollectorTest is Base {
     }
 
     function test_claim_withProtocolFee() public {
-        uint256 payoutAmount = 100 ether;
-        vm.prank(incentiveCollectorManager);
-        smartOperator.setIncentiveCollectorPayoutAmount(payoutAmount);
+        uint256 payoutAmount = incentiveCollector.payoutAmount();
+        vm.prank(address(smartOperator));
+        incentiveCollector.queueFeePercentageChange(1000); // 10%
 
-        vm.prank(validatorFeeManager);
-        smartOperator.setProtocolFeePercentage(1000); // 10%
+        test_claim();
+
+        assertEq(incentiveCollector.feePercentage(), 1000);
 
         address claimer = makeAddr("claimer");
-        vm.deal(claimer, payoutAmount);
+        vm.deal(claimer, 100 ether);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, payoutAmount);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
-            uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
-            assertEq(balanceIncentiveCollector, 100 ether);
-            uint256 balanceClaimer = IERC20(incentiveTokens[i]).balanceOf(claimer);
-            assertEq(balanceClaimer, 0);
-            vm.expectEmit(true, true, true, true);
-            emit IIncentiveCollector.IncentiveTokenClaimed(claimer, incentiveTokens[i], balanceIncentiveCollector);
+            MockERC20(incentiveTokens[i]).mint(address(incentiveCollector), 100 ether);
         }
 
+        uint256 expectedFeeSharesMinted = stakingPool.previewDeposit(10 ether);
+        uint256 expectedFee = 10 ether; // 10% of 100 ether
+
         vm.expectEmit(true, true, true, true);
-        emit IIncentiveCollector.IncentiveTokensClaimed(claimer, payoutAmount - 10 ether, 10 ether);
+        emit IIncentiveCollector.IncentiveTokensClaimed(claimer, payoutAmount, expectedFee);
         vm.prank(claimer);
         incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
 
         assertEq(address(incentiveCollector).balance, 0);
-        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, payoutAmount - 10 ether);
-        assertEq(address(smartOperator).balance, 10 ether);
+        assertEq(stakingPool.balanceOf(address(this)), expectedFeeSharesMinted);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, payoutAmount * 2);
 
         for (uint256 i = 0; i < incentiveTokens.length; i++) {
             uint256 balanceIncentiveCollector = IERC20(incentiveTokens[i]).balanceOf(address(incentiveCollector));
             assertEq(balanceIncentiveCollector, 0);
             uint256 balanceClaimer = IERC20(incentiveTokens[i]).balanceOf(claimer);
-            assertEq(balanceClaimer, 100 ether);
+            assertEq(balanceClaimer, 200 ether);
         }
     }
 

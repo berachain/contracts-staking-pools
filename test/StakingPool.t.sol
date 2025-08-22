@@ -135,7 +135,7 @@ contract StakingPoolTest is Base {
         vm.prank(bob);
         vm.expectEmit(true, true, true, true);
         emit IStakingPool.ActiveTresholdReached();
-        stakingPool.submit{ value: userDepositAmount }();
+        stakingPool.submit{ value: userDepositAmount }(bob);
 
         uint256 expectedBufferedAssets = (bufferedAssets + userDepositAmount) % 1 gwei;
         uint256 expectedDepositAmount = ((bufferedAssets + userDepositAmount) / 1 gwei) * 1 gwei;
@@ -172,13 +172,13 @@ contract StakingPoolTest is Base {
 
     function test_submit_Fail_Paused() public {
         vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
-        stakingPool.submit{ value: 10_000 ether }();
+        stakingPool.submit{ value: 10_000 ether }(alice);
     }
 
     function test_submit_Fail_InvalidAmount() public {
         test_activate();
         vm.expectRevert(IStakingPool.InvalidAmount.selector);
-        stakingPool.submit{ value: 0 }();
+        stakingPool.submit{ value: 0 }(alice);
     }
 
     function test_getSharesByAsset(uint256 amount) public {
@@ -275,7 +275,7 @@ contract StakingPoolTest is Base {
     function _helper_submit(address submitter, uint256 amount) internal {
         vm.deal(submitter, amount);
         vm.prank(submitter);
-        stakingPool.submit{ value: amount }();
+        stakingPool.submit{ value: amount }(submitter);
     }
 
     function test_pause() public {
@@ -294,7 +294,7 @@ contract StakingPoolTest is Base {
 
     function test_unpause_Fail_FullExited() public {
         // set isFullExited to true
-        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(64))));
         uint256 newValue = currentValue | (1 << 8);
         vm.store(address(stakingPool), bytes32(uint256(64)), bytes32(newValue));
         assertEq(stakingPool.isFullExited(), true);
@@ -366,28 +366,28 @@ contract StakingPoolTest is Base {
 
         vm.prank(validatorFeeManager);
         smartOperator.setProtocolFeePercentage(1000); // 10%
-        uint256 baseRateFeeAmount = 0;
+        uint256 bgtBalanceFeeAmount = 0;
         assertEq(
             stakingPool.totalAssets(),
-            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - baseRateFeeAmount)
+            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - bgtBalanceFeeAmount)
                 + submitAmount
         );
 
         mockBGT.mint(address(smartOperator), bgtAmount);
-        baseRateFeeAmount = 100 ether; // 10% of 1000 ether
+        bgtBalanceFeeAmount = 100 ether; // 10% of 1000 ether
         assertEq(
             stakingPool.totalAssets(),
-            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - baseRateFeeAmount)
+            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - bgtBalanceFeeAmount)
                 + submitAmount
         );
 
         vm.prank(validatorFeeManager);
         smartOperator.setProtocolFeePercentage(2000); // 20%
         mockBGT.mint(address(smartOperator), bgtAmount);
-        baseRateFeeAmount += 200 ether; // 100 ether + 20% of 1000 ether
+        bgtBalanceFeeAmount = 200 ether; // 20% of 1000 ether
         assertEq(
             stakingPool.totalAssets(),
-            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - baseRateFeeAmount)
+            stakingPool.totalDeposits() + (mockBGT.balanceOf(address(smartOperator)) - bgtBalanceFeeAmount)
                 + submitAmount
         );
     }
