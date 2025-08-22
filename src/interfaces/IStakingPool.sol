@@ -10,6 +10,7 @@ interface IStakingPool {
     event FullExitTriggered();
     event TotalDepositsUpdated(uint256 newTotalDeposits);
     event ActiveTresholdReached();
+    event MinEffectiveBalanceUpdated(uint256 newMinEffectiveBalance);
 
     // ERRORS
 
@@ -25,11 +26,18 @@ interface IStakingPool {
     error TransferFailed();
     // Signature: 0x4134ed3a
     error WithdrawalNotAllowed();
+    // Signature: 0x0ec2e9b9
+    error InvalidMinEffectiveBalance();
 
     // GETTERS
 
     /// @notice Returns true if the staking pool has been dismissed.
     function isFullExited() external view returns (bool);
+
+    /// @notice Returns the minimum effective balance for the staking pool.
+    /// @dev If not set, returns the default minimum effective balance.
+    /// @return The minimum effective balance for the staking pool.
+    function minEffectiveBalance() external view returns (uint256);
 
     // FUNCTIONS
 
@@ -44,6 +52,12 @@ interface IStakingPool {
     /// @dev Can only be called by the `StakingRewardsVault`.
     /// @dev Need a dedicated function because funds receive() is treated as user deposit.
     function receiveRewards() external payable;
+
+    /// @notice Sets the minimum effective balance for the staking pool.
+    /// @param minEffectiveBalance The minimum effective balance to set for the staking pool.
+    /// @custom:throws InvalidSender if not called by the smart operator.
+    /// @custom:throws InvalidMinEffectiveBalance if the new min effective balance is not valid.
+    function setMinEffectiveBalance(uint256 minEffectiveBalance) external;
 
     /// @notice Processes a withdrawal request from a user by burning their shares.
     /// @dev Can only be called by the withdrawal request ERC721 contract.

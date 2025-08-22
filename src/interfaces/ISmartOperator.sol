@@ -67,6 +67,11 @@ interface ISmartOperator {
     /// @param tokens The list of tokens claimed.
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external;
 
+    /// @notice Sets the minimum effective balance for the staking pool.
+    /// @param minEffectiveBalance The minimum effective balance to set for the staking pool.
+    /// @dev Can only be called by DEFAULT_ADMIN_ROLE.
+    function setMinEffectiveBalance(uint256 minEffectiveBalance) external;
+
     /// @notice Sets the payout amount for the incentive collector.
     /// @dev Can only be called by INCENTIVE_COLLECTOR_MANAGER_ROLE.
     /// @param payoutAmount The amount of payout to set for the incentive collector.

@@ -89,7 +89,7 @@ contract StakingPoolTest is Base {
         test_activate();
 
         userDepositAmount =
-            bound(userDepositAmount, 1, (stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
+            bound(userDepositAmount, 1, (stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
             // avoid deposit
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
 
@@ -106,7 +106,7 @@ contract StakingPoolTest is Base {
         test_activate();
 
         userDepositAmount =
-            bound(userDepositAmount, 1, (stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
+            bound(userDepositAmount, 1, (stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
             // avoid deposit
         uint256 expectedUserShares = stakingPool.convertToShares(userDepositAmount);
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
@@ -124,7 +124,7 @@ contract StakingPoolTest is Base {
     function testFuzz_submit_triggerFirstDeposit(uint256 userDepositAmount) public {
         (uint256 aliceDepositAmount,, uint256 aliceBufferedAssets) = testFuzz_submit(userDepositAmount);
 
-        uint256 minDepositAmount = stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - aliceBufferedAssets;
+        uint256 minDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - aliceBufferedAssets;
         uint256 maxDepositAmount =
             stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - aliceBufferedAssets - 1;
         userDepositAmount = bound(userDepositAmount, minDepositAmount, maxDepositAmount);
@@ -211,7 +211,7 @@ contract StakingPoolTest is Base {
     )
         public
     {
-        submittedAmount = bound(submittedAmount, 1, stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 1); // bound
+        submittedAmount = bound(submittedAmount, 1, stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1); // bound
             // to avoid deposit
         withdrawalAmount = bound(withdrawalAmount, 1, submittedAmount); // bound to avoid withdrawal
         testFuzz_submit(submittedAmount);
@@ -237,7 +237,7 @@ contract StakingPoolTest is Base {
 
     function test_notifyWithdrawalRequest_DepositGreaterThenMinEffectiveBalance() public {
         test_activate();
-        uint256 aliceDepositAmount = stakingPool.MIN_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT;
+        uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
         uint256 bobDepositAmount = stakingPool.MIN_CL_DEPOSIT_AMOUNT();
 
         _helper_submit(alice, aliceDepositAmount);
@@ -296,7 +296,7 @@ contract StakingPoolTest is Base {
         // set isFullExited to true
         uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
         uint256 newValue = currentValue | (1 << 8);
-        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
+        vm.store(address(stakingPool), bytes32(uint256(64)), bytes32(newValue));
         assertEq(stakingPool.isFullExited(), true);
 
         vm.expectRevert(IStakingPool.StakingPoolFullExited.selector);
@@ -400,5 +400,61 @@ contract StakingPoolTest is Base {
         stakingPool.updateTotalDeposits(newBalance);
 
         assertTrue(stakingPool.paused());
+    }
+
+    function test_minEffectiveBalance() public {
+        test_activate();
+
+        // Default min effective balance should be MIN_EFFECTIVE_BALANCE constant
+        assertEq(stakingPool.minEffectiveBalance(), stakingPool.MIN_EFFECTIVE_BALANCE());
+    }
+
+    function test_setMinEffectiveBalance() public {
+        test_activate();
+
+        uint256 newMinEffectiveBalance = 300_000 ether;
+
+        vm.prank(address(smartOperator));
+        stakingPool.setMinEffectiveBalance(newMinEffectiveBalance);
+
+        assertEq(stakingPool.minEffectiveBalance(), newMinEffectiveBalance);
+    }
+
+    function test_setMinEffectiveBalance_Fail_InvalidSender() public {
+        test_activate();
+
+        address invalidSender = makeAddr("invalidSender");
+        uint256 newMinEffectiveBalance = 300_000 ether;
+
+        vm.prank(invalidSender);
+        vm.expectRevert(
+            abi.encodeWithSelector(IStakingPool.InvalidSender.selector, invalidSender, address(smartOperator))
+        );
+        stakingPool.setMinEffectiveBalance(newMinEffectiveBalance);
+    }
+
+    function test_setMinEffectiveBalance_Fail_TooLow() public {
+        test_activate();
+
+        uint256 tooLowBalance = stakingPool.MIN_EFFECTIVE_BALANCE() - 1;
+
+        vm.prank(address(smartOperator));
+        vm.expectRevert(IStakingPool.InvalidMinEffectiveBalance.selector);
+        stakingPool.setMinEffectiveBalance(tooLowBalance);
+    }
+
+    function test_setMinEffectiveBalance_Fail_TooHigh() public {
+        test_activate();
+
+        uint256 tooHighBalance = stakingPool.MAX_EFFECTIVE_BALANCE();
+
+        vm.prank(address(smartOperator));
+        vm.expectRevert(IStakingPool.InvalidMinEffectiveBalance.selector);
+        stakingPool.setMinEffectiveBalance(tooHighBalance);
+
+        tooHighBalance++;
+        vm.prank(address(smartOperator));
+        vm.expectRevert(IStakingPool.InvalidMinEffectiveBalance.selector);
+        stakingPool.setMinEffectiveBalance(tooHighBalance);
     }
 }

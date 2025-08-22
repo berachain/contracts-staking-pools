@@ -7,10 +7,13 @@ import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
+import { StakingPool } from "src/core/StakingPool.sol";
+import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 
 contract SmartOperatorTest is Base {
     SmartOperator smartOperator;
     WithdrawalRequestERC721 withdrawalRequestERC721;
+    StakingPool stakingPool;
 
     address validatorFeeManager = makeAddr("validatorFeeManager");
 
@@ -20,6 +23,7 @@ contract SmartOperatorTest is Base {
 
         smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
         withdrawalRequestERC721 = _getWithdrawalRequestERC721(fixtureValidatorData.pubkey);
+        stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
     }
 
     function test_initialization() public view {
@@ -274,5 +278,21 @@ contract SmartOperatorTest is Base {
         assertEq(address(smartOperator).balance, 10 ether);
 
         assertEq(smartOperator.baseRateChargedFees(), 0);
+    }
+
+    function test_setMinEffectiveBalance() public {
+        smartOperator.setMinEffectiveBalance(300_000 ether);
+        assertEq(stakingPool.minEffectiveBalance(), 300_000 ether);
+    }
+
+    function test_setMinEffectiveBalance_RevertWhen_NotAdmin() public {
+        address notAdmin = makeAddr("notAdmin");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, notAdmin, smartOperator.DEFAULT_ADMIN_ROLE()
+            )
+        );
+        vm.prank(notAdmin);
+        smartOperator.setMinEffectiveBalance(300_000 ether);
     }
 }

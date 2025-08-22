@@ -35,7 +35,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     /// @dev Maximum amount to be deposited for a validator on Berachain.
     uint256 public constant MAX_EFFECTIVE_BALANCE = 10_000_000 ether;
 
-    /// @dev Once MIN_EFFECTIVE_BALANCE is deposited, withdrawal are disabled for a cool down period (~1 day)
+    /// @dev Once minEffectiveBalance is deposited, withdrawal are disabled for a cool down period (~1 day)
     uint64 public constant ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS = 43_200;
 
     // STORAGE
@@ -52,6 +52,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     address internal _defaultSharesRecipient;
     uint256 internal _validatorActivationBlock;
     uint256 internal _frozenTotalAssets;
+    uint256 internal _minEffectiveBalance;
 
     bool public isActive;
     bool public isFullExited;
@@ -108,6 +109,11 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         return _pubkey;
     }
 
+    /// @inheritdoc IStakingPool
+    function minEffectiveBalance() public view returns (uint256) {
+        return _minEffectiveBalance == 0 ? MIN_EFFECTIVE_BALANCE : _minEffectiveBalance;
+    }
+
     // FUNCTIONS
 
     /// @inheritdoc IStakingPool
@@ -124,6 +130,18 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         isActive = true;
         _unpause();
         emit StakingPoolActivated();
+    }
+
+    /// @inheritdoc IStakingPool
+    function setMinEffectiveBalance(uint256 newMinEffectiveBalance) external {
+        _validateSender(_smartOperator);
+
+        if (newMinEffectiveBalance < MIN_EFFECTIVE_BALANCE || newMinEffectiveBalance >= MAX_EFFECTIVE_BALANCE) {
+            revert InvalidMinEffectiveBalance();
+        }
+
+        _minEffectiveBalance = newMinEffectiveBalance;
+        emit MinEffectiveBalanceUpdated(newMinEffectiveBalance);
     }
 
     /// @inheritdoc IStakingPool
@@ -155,7 +173,7 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
         // If pool is not full exited, update total deposits and trigger full exit if necessary
         if (!isFullExited) {
             totalDeposits -= assets;
-            if (totalDeposits < MIN_EFFECTIVE_BALANCE) {
+            if (totalDeposits < minEffectiveBalance()) {
                 _triggerFullExit();
             }
         } else {
@@ -245,14 +263,14 @@ contract StakingPool is IStakingPool, StBERA, Initializable, PausableUpgradeable
     }
 
     /// @dev Determines if the current buffered assets can be deposited to the consensus layer.
-    /// 1. If below MIN_EFFECTIVE_BALANCE, check if total deposits plus buffered assets
-    ///    meet the MIN_EFFECTIVE_BALANCE requirement.
-    /// 2. If above MIN_EFFECTIVE_BALANCE, check:
+    /// 1. If below minEffectiveBalance, check if total deposits plus buffered assets
+    ///    meet the minEffectiveBalance requirement.
+    /// 2. If above minEffectiveBalance, check:
     ///    - buffered assets are >= MIN_CL_DEPOSIT_AMOUNT
     ///    - remaining capacity after deposit to be 0 or >= MIN_CL_DEPOSIT_AMOUNT, to avoid residuals.
     function _canDeposit() internal returns (bool) {
         if (!activeTresholdReached) {
-            if (totalDeposits + bufferedAssets >= MIN_EFFECTIVE_BALANCE) {
+            if (totalDeposits + bufferedAssets >= minEffectiveBalance()) {
                 activeTresholdReached = true;
                 _validatorActivationBlock = block.number;
                 emit ActiveTresholdReached();

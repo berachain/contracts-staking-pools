@@ -208,6 +208,11 @@ contract SmartOperator is ISmartOperator, Initializable, AccessControlUpgradeabl
         return BGT.unboostedBalanceOf(address(this));
     }
 
+    /// @inheritdoc ISmartOperator
+    function setMinEffectiveBalance(uint256 minEffectiveBalance) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        IStakingPool(_stakingPool).setMinEffectiveBalance(minEffectiveBalance);
+    }
+
     /// @notice Sets the payout amount for the incentive collector.
     /// @param payoutAmount The amount of payout to set for the incentive collector.
     function setIncentiveCollectorPayoutAmount(uint256 payoutAmount)
