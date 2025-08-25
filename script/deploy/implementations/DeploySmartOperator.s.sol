@@ -13,6 +13,6 @@ contract DeploySmartOperatorScript is BaseScript, ImplementationDeployer {
 
     function _deploySmartOperatorImpl() internal returns (address smartOperatorImpl) {
         smartOperatorImpl = deployImplementation(0, type(SmartOperator).creationCode);
-        _checkDeploymentAddress("smartOperatorImpl", smartOperatorImpl, SMART_OPERATOR_IMPL_ADDRESS);
+        _checkDeploymentAddress("SmartOperator Impl", smartOperatorImpl, SMART_OPERATOR_IMPL_ADDRESS);
     }
 }

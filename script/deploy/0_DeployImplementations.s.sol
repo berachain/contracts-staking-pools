@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.30;
+pragma solidity ^0.8.30;
 
 import { BaseScript } from "script/base/Base.s.sol";
 import { DeployIncentiveCollectorScript } from "script/deploy/implementations/DeployIncentiveCollector.s.sol";

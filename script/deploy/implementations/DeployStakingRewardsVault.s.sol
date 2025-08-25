@@ -13,6 +13,8 @@ contract DeployStakingRewardsVaultScript is BaseScript, ImplementationDeployer {
 
     function _deployStakingRewardsVaultImpl() internal returns (address stakingRewardsVaultImpl) {
         stakingRewardsVaultImpl = deployImplementation(0, type(StakingRewardsVault).creationCode);
-        _checkDeploymentAddress("stakingRewardsVaultImpl", stakingRewardsVaultImpl, STAKING_REWARDS_VAULT_IMPL_ADDRESS);
+        _checkDeploymentAddress(
+            "StakingRewardsVault Impl", stakingRewardsVaultImpl, STAKING_REWARDS_VAULT_IMPL_ADDRESS
+        );
     }
 }

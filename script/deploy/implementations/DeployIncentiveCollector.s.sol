@@ -13,6 +13,6 @@ contract DeployIncentiveCollectorScript is BaseScript, ImplementationDeployer {
 
     function _deployIncentiveCollectorImpl() internal returns (address incentiveCollectorImpl) {
         incentiveCollectorImpl = deployImplementation(0, type(IncentiveCollector).creationCode);
-        _checkDeploymentAddress("incentiveCollectorImpl", incentiveCollectorImpl, INCENTIVE_COLLECTOR_IMPL_ADDRESS);
+        _checkDeploymentAddress("IncentiveCollector Impl", incentiveCollectorImpl, INCENTIVE_COLLECTOR_IMPL_ADDRESS);
     }
 }

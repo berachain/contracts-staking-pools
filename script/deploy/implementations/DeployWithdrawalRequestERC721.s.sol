@@ -14,7 +14,7 @@ contract DeployWithdrawalRequestERC721Script is BaseScript, ImplementationDeploy
     function _deployWithdrawalRequestERC721Impl() internal returns (address withdrawalRequestERC721Impl) {
         withdrawalRequestERC721Impl = deployImplementation(0, type(WithdrawalRequestERC721).creationCode);
         _checkDeploymentAddress(
-            "withdrawalRequestERC721Impl", withdrawalRequestERC721Impl, WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS
+            "WithdrawalRequestERC721 Impl", withdrawalRequestERC721Impl, WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS
         );
     }
 }

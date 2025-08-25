@@ -13,6 +13,6 @@ contract DeployStakingPoolScript is BaseScript, ImplementationDeployer {
 
     function _deployStakingPoolImpl() internal returns (address stakingPoolImpl) {
         stakingPoolImpl = deployImplementation(0, type(StakingPool).creationCode);
-        _checkDeploymentAddress("stakingPoolImpl", stakingPoolImpl, STAKING_POOL_IMPL_ADDRESS);
+        _checkDeploymentAddress("StakingPool Impl", stakingPoolImpl, STAKING_POOL_IMPL_ADDRESS);
     }
 }
