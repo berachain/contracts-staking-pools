@@ -21,20 +21,10 @@ contract TransferOwnershipScript is RBAC, BaseScript, Storage {
 
     function transferOwnership(address newOwner) public broadcast {
         _transferOwnership("StakingPoolContractsFactory", STAKING_POOL_CONTRACTS_FACTORY_ADDRESS, newOwner);
+        _transferOwnership("AccountingOracle", ACCOUNTING_ORACLE_ADDRESS, newOwner);
 
         RBAC.AccountDescription memory deployer = RBAC.AccountDescription({ name: "deployer", addr: msg.sender });
         RBAC.AccountDescription memory governance = RBAC.AccountDescription({ name: "Governance", addr: newOwner });
-
-        // AccountingOracle
-        AccountingOracle accountingOracle = AccountingOracle(ACCOUNTING_ORACLE_ADDRESS);
-        RBAC.RoleDescription memory accountingOracleAdminRole = RBAC.RoleDescription({
-            contractName: "AccountingOracle",
-            contractAddr: ACCOUNTING_ORACLE_ADDRESS,
-            name: "DEFAULT_ADMIN_ROLE",
-            role: accountingOracle.DEFAULT_ADMIN_ROLE()
-        });
-
-        _transferRole(accountingOracleAdminRole, deployer, governance);
 
         // WithdrawalVault
         WithdrawalVault withdrawalVault = WithdrawalVault(payable(WITHDRAWAL_VAULT_ADDRESS));

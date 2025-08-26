@@ -60,20 +60,9 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
         _checkDeploymentAddress("WithdrawalVault", address(withdrawalVault), WITHDRAWAL_VAULT_ADDRESS);
 
         require(stakingPoolContractsFactory.owner() == msg.sender, "StakingPoolContractsFactory owner is not deployer");
+        require(accountingOracle.owner() == msg.sender, "AccountingOracle owner is not deployer");
         require(
             stakingPoolContractsFactory.accountingOracle() == ACCOUNTING_ORACLE_ADDRESS, "Accounting oracle not set"
         );
-
-        // check roles
-        RBAC.AccountDescription memory deployerRBAC = RBAC.AccountDescription({ name: "deployer", addr: msg.sender });
-
-        RBAC.RoleDescription memory accountingOracleAdminRole = RBAC.RoleDescription({
-            contractName: "AccountingOracle",
-            contractAddr: ACCOUNTING_ORACLE_ADDRESS,
-            name: "DEFAULT_ADMIN_ROLE",
-            role: accountingOracle.DEFAULT_ADMIN_ROLE()
-        });
-        _requireRole(accountingOracleAdminRole, deployerRBAC);
-        console2.log("AccountingOracle's DEFAULT_ADMIN_ROLE granted to:", msg.sender);
     }
 }
