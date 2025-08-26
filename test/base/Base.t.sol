@@ -10,7 +10,6 @@ import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
-import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import { BeaconRoots } from "src/libraries/BeaconRoots.sol";
 import { MockEIP4788 } from "test/mock/MockEIP4788.sol";
@@ -51,7 +50,6 @@ abstract contract Base is Test, Create2Deployer {
     address smartOperatorImpl;
     address stakingPoolImpl;
     address stakingRewardsVaultImpl;
-    address withdrawalRequestERC721Impl;
     address withdrawalVaultImpl;
 
     MockEIP4788 mockEIP4788;
@@ -74,7 +72,6 @@ abstract contract Base is Test, Create2Deployer {
         smartOperatorImpl = payable(deployWithCreate2(0, type(SmartOperator).creationCode));
         stakingPoolImpl = payable(deployWithCreate2(0, type(StakingPool).creationCode));
         stakingRewardsVaultImpl = payable(deployWithCreate2(0, type(StakingRewardsVault).creationCode));
-        withdrawalRequestERC721Impl = payable(deployWithCreate2(0, type(WithdrawalRequestERC721).creationCode));
         incentiveCollectorImpl = payable(deployWithCreate2(0, type(IncentiveCollector).creationCode));
 
         Deployer deployer = new Deployer(
@@ -85,7 +82,6 @@ abstract contract Base is Test, Create2Deployer {
             address(smartOperatorImpl),
             address(stakingPoolImpl),
             address(stakingRewardsVaultImpl),
-            address(withdrawalRequestERC721Impl),
             address(incentiveCollectorImpl)
         );
 
@@ -130,20 +126,14 @@ abstract contract Base is Test, Create2Deployer {
         bytes memory dummySignature = _create96Byte();
 
         bytes memory withdrawalCredentials = _withdrawalAddressToCredentials(address(withdrawalVault));
-        (
-            address smartOperator,
-            address stakingPool,
-            address stakingRewardsVault,
-            address withdrawalRequestERC721,
-            address incentiveCollector
-        ) = stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) =
+        stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
             pubkey, withdrawalCredentials, dummySignature, address(this), address(this)
         );
 
         assertEq(smartOperator, stakingPoolContractsFactory.getCoreContracts(pubkey).smartOperator);
         assertEq(stakingPool, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingPool);
         assertEq(stakingRewardsVault, stakingPoolContractsFactory.getCoreContracts(pubkey).stakingRewardsVault);
-        assertEq(withdrawalRequestERC721, stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalRequestERC721);
         assertEq(incentiveCollector, stakingPoolContractsFactory.getCoreContracts(pubkey).incentiveCollector);
 
         mockBeaconDeposit.setOperator(pubkey, smartOperator);
@@ -171,12 +161,6 @@ abstract contract Base is Test, Create2Deployer {
 
     function _getStakingRewardsVault(bytes memory pubkey) internal view returns (StakingRewardsVault) {
         return StakingRewardsVault(payable(stakingPoolContractsFactory.getCoreContracts(pubkey).stakingRewardsVault));
-    }
-
-    function _getWithdrawalRequestERC721(bytes memory pubkey) internal view returns (WithdrawalRequestERC721) {
-        return WithdrawalRequestERC721(
-            payable(stakingPoolContractsFactory.getCoreContracts(pubkey).withdrawalRequestERC721)
-        );
     }
 
     function _getIncentiveCollector(bytes memory pubkey) internal view returns (IncentiveCollector) {

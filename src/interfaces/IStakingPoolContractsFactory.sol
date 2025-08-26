@@ -46,17 +46,12 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
 
     // EVENTS
     event StakingPoolContractsDeployed(
-        address smartOperator,
-        address stakingPool,
-        address stakingRewardsVault,
-        address withdrawalRequestERC721,
-        address incentiveCollector
+        address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector
     );
     event StakingPoolActivated(address stakingPool);
     event SmartOperatorBeaconImplUpgraded(address newImplementation);
     event StakingPoolBeaconImplUpgraded(address newImplementation);
     event StakingRewardsVaultBeaconImplUpgraded(address newImplementation);
-    event WithdrawalRequestERC721BeaconImplUpgraded(address newImplementation);
     event IncentiveCollectorBeaconImplUpgraded(address newImplementation);
     event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
 
@@ -69,7 +64,7 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
     )
         external
         payable
-        returns (address, address, address, address, address);
+        returns (address, address, address, address);
 
     function activateStakingPool(
         ValidatorData calldata validatorData,
@@ -101,12 +96,6 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
     /// @dev Only callable by the owner of the factory contract
     /// @custom:throws InvalidAddress if newImplementation is the zero address
     function upgradeStakingRewardsVaultBeaconImpl(address newImplementation) external;
-
-    /// @notice Upgrades the implementation of the WithdrawalRequestERC721 beacon
-    /// @param newImplementation The address of the new implementation contract
-    /// @dev Only callable by the owner of the factory contract
-    /// @custom:throws InvalidAddress if newImplementation is the zero address
-    function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external;
 
     /// @notice Upgrades the implementation of the IncentiveCollector beacon
     /// @param newImplementation The address of the new implementation contract

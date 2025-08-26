@@ -8,6 +8,9 @@ libs = ["lib"]
 fs_permissions = [{ access = "read", path = "./test"}, { access = "read", path = "./out"}]
 bytecode_hash = "none"
 cbor_metadata = false
+optimizer = true
+optimizer_runs = 4294967295
+via_ir = false
 
 [fmt]
 bracket_spacing = true

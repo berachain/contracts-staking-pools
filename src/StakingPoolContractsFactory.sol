@@ -10,8 +10,6 @@ import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
-import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
-import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
 import { IStakingPoolContractsFactory } from "src/interfaces/IStakingPoolContractsFactory.sol";
 
@@ -34,7 +32,6 @@ contract StakingPoolContractsFactory is
     address internal _beaconSmartOperator;
     address internal _beaconStakingPool;
     address internal _beaconStakingRewardsVault;
-    address internal _beaconWithdrawalRequestERC721;
     address internal _beaconIncentiveCollector;
 
     mapping(bytes => CoreContracts) internal _coreContracts;
@@ -50,7 +47,6 @@ contract StakingPoolContractsFactory is
         address smartOperatorInitialImpl,
         address stakingPoolInitialImpl,
         address stakingRewardsVaultInitialImpl,
-        address withdrawalRequestQueueInitialImpl,
         address incentiveCollectorInitialImpl
     )
         public
@@ -67,8 +63,6 @@ contract StakingPoolContractsFactory is
         _beaconSmartOperator = address(new UpgradeableBeacon(address(this), smartOperatorInitialImpl));
         _beaconStakingPool = address(new UpgradeableBeacon(address(this), stakingPoolInitialImpl));
         _beaconStakingRewardsVault = address(new UpgradeableBeacon(address(this), stakingRewardsVaultInitialImpl));
-        _beaconWithdrawalRequestERC721 =
-            address(new UpgradeableBeacon(address(this), withdrawalRequestQueueInitialImpl));
         _beaconIncentiveCollector = address(new UpgradeableBeacon(address(this), incentiveCollectorInitialImpl));
     }
 
@@ -81,14 +75,12 @@ contract StakingPoolContractsFactory is
     )
         external
         payable
-        returns (address, address, address, address, address)
+        returns (address, address, address, address)
     {
         _validateInputs(pubkey, withdrawalCredentials);
 
         CoreContracts memory coreContracts =
             _deployAndInizializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
-
-        IWithdrawalVault(withdrawalVault).whitelistWithdrawalRequestERC721(coreContracts.withdrawalRequestERC721);
 
         _performFirstDeposit(pubkey, withdrawalCredentials, signature, coreContracts.smartOperator);
 
@@ -96,7 +88,6 @@ contract StakingPoolContractsFactory is
             coreContracts.smartOperator,
             coreContracts.stakingPool,
             coreContracts.stakingRewardsVault,
-            coreContracts.withdrawalRequestERC721,
             coreContracts.incentiveCollector
         );
 
@@ -104,7 +95,6 @@ contract StakingPoolContractsFactory is
             coreContracts.smartOperator,
             coreContracts.stakingPool,
             coreContracts.stakingRewardsVault,
-            coreContracts.withdrawalRequestERC721,
             coreContracts.incentiveCollector
         );
     }
@@ -124,8 +114,6 @@ contract StakingPoolContractsFactory is
             LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconStakingPool, salt, address(this));
         coreContracts.stakingRewardsVault =
             LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconStakingRewardsVault, salt, address(this));
-        coreContracts.withdrawalRequestERC721 =
-            LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconWithdrawalRequestERC721, salt, address(this));
         coreContracts.incentiveCollector =
             LibClone.predictDeterministicAddressERC1967BeaconProxy(_beaconIncentiveCollector, salt, address(this));
 
@@ -256,12 +244,6 @@ contract StakingPoolContractsFactory is
     }
 
     /// @inheritdoc IStakingPoolContractsFactory
-    function upgradeWithdrawalRequestERC721BeaconImpl(address newImplementation) external onlyOwner {
-        _upgradeBeaconImpl(_beaconWithdrawalRequestERC721, newImplementation);
-
-        emit WithdrawalRequestERC721BeaconImplUpgraded(newImplementation);
-    }
-
     function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external onlyOwner {
         _upgradeBeaconImpl(_beaconIncentiveCollector, newImplementation);
 
@@ -340,8 +322,6 @@ contract StakingPoolContractsFactory is
         coreContracts.stakingPool = LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingPool, salt);
         coreContracts.stakingRewardsVault =
             LibClone.deployDeterministicERC1967BeaconProxy(_beaconStakingRewardsVault, salt);
-        coreContracts.withdrawalRequestERC721 =
-            LibClone.deployDeterministicERC1967BeaconProxy(_beaconWithdrawalRequestERC721, salt);
         coreContracts.incentiveCollector =
             LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
 
@@ -351,9 +331,6 @@ contract StakingPoolContractsFactory is
         );
 
         StakingRewardsVault(payable(coreContracts.stakingRewardsVault)).initialize(owner(), coreContracts.stakingPool);
-        WithdrawalRequestERC721(payable(coreContracts.withdrawalRequestERC721)).initialize(
-            owner(), pubkey, address(this)
-        );
         IncentiveCollector(payable(coreContracts.incentiveCollector)).initialize(
             owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey
         );

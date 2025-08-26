@@ -53,7 +53,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     bytes internal _pubkey;
     address internal _stakingPool;
     address internal _incentiveCollector;
-    address internal _withdrawalRequestERC721;
+    address internal _withdrawalVault;
     address internal _stakingRewardsVault;
     uint256 internal _bgtBalanceAlreadyCharged;
 
@@ -84,11 +84,11 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
         _pubkey = pubkey;
 
+        _withdrawalVault = ICoreContractsStorage(factory).withdrawalVault();
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
 
         _stakingPool = contracts.stakingPool;
         _incentiveCollector = contracts.incentiveCollector;
-        _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
         _stakingRewardsVault = contracts.stakingRewardsVault;
     }
 
@@ -156,7 +156,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
     /// @inheritdoc ISmartOperator
     function fullExitRedeemBGT(address receiver) external {
-        _validateSender(_withdrawalRequestERC721);
+        _validateSender(_withdrawalVault);
 
         // Complete any queued drop boost.
         BGT.dropBoost(address(this), _pubkey);

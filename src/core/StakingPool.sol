@@ -13,7 +13,7 @@ import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
-import { IWithdrawalRequestERC721 } from "src/interfaces/IWithdrawalRequestERC721.sol";
+import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 
 contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
     // CONSTANTS
@@ -40,9 +40,8 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     address internal _factory;
     address internal _smartOperator;
     address internal _stakingRewardsVault;
-    address internal _withdrawalRequestERC721;
-    address internal _accountingOracle;
     address internal _withdrawalVault;
+    address internal _accountingOracle;
 
     address internal _defaultSharesRecipient;
     uint256 internal _validatorActivationBlock;
@@ -78,7 +77,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         ICoreContractsStorage.CoreContracts memory contracts = ICoreContractsStorage(factory).getCoreContracts(pubkey);
         _smartOperator = contracts.smartOperator;
         _stakingRewardsVault = contracts.stakingRewardsVault;
-        _withdrawalRequestERC721 = contracts.withdrawalRequestERC721;
+
         _accountingOracle = ICoreContractsStorage(factory).accountingOracle();
         _pause();
     }
@@ -147,7 +146,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
     /// @inheritdoc IStakingPool
     function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool, bool) {
-        _validateSender(_withdrawalRequestERC721);
+        _validateSender(_withdrawalVault);
 
         uint256 amountOfSharesToBurn = previewWithdraw(assets);
         _burnShares(user, amountOfSharesToBurn);
@@ -184,7 +183,6 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
         if (newTotalDeposits == 0) {
             _triggerFullExit();
-            IWithdrawalRequestERC721(_withdrawalRequestERC721).notifyFullExitFromCL();
         } else {
             totalDeposits = newTotalDeposits;
 
@@ -367,10 +365,11 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         // Transfer staking rewards to the withdrawal vault
         if (address(_stakingRewardsVault).balance > 0) {
             uint256 rewardsToWithdraw = address(_stakingRewardsVault).balance;
-            IStakingRewardsVault(_stakingRewardsVault).withdrawRewards(rewardsToWithdraw);
+            _collectRewards(rewardsToWithdraw);
             SafeTransferLib.safeTransferETH(_withdrawalVault, rewardsToWithdraw);
         }
 
+        IWithdrawalVault(_withdrawalVault).notifyFullExitFromCL(_pubkey);
         isFullExited = true;
         _pause();
 

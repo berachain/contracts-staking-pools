@@ -27,7 +27,6 @@ contract Deployer is Create2Deployer {
         address smartOperatorInitialImpl,
         address stakingPoolInitialImpl,
         address stakingRewardsVaultInitialImpl,
-        address withdrawalRequestQueueInitialImpl,
         address incentiveCollectorInitialImpl
     ) {
         // Deploy accounting oracle implementation
@@ -63,7 +62,6 @@ contract Deployer is Create2Deployer {
             smartOperatorInitialImpl,
             stakingPoolInitialImpl,
             stakingRewardsVaultInitialImpl,
-            withdrawalRequestQueueInitialImpl,
             incentiveCollectorInitialImpl
         );
     }

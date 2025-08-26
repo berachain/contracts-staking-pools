@@ -224,7 +224,7 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.totalDeposits(), INITIAL_DEPOSIT_AMOUNT);
         assertFalse(stakingPool.activeTresholdReached());
 
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
+        vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
             stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
 
@@ -243,13 +243,13 @@ contract StakingPoolTest is Base {
         _helper_submit(alice, aliceDepositAmount);
         _helper_submit(bob, bobDepositAmount);
 
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
+        vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
         stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
 
         vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
 
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
+        vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullExited, bool isShortCircuit) =
             stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
 
@@ -294,9 +294,9 @@ contract StakingPoolTest is Base {
 
     function test_unpause_Fail_FullExited() public {
         // set isFullExited to true
-        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(64))));
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
         uint256 newValue = currentValue | (1 << 8);
-        vm.store(address(stakingPool), bytes32(uint256(64)), bytes32(newValue));
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
         assertEq(stakingPool.isFullExited(), true);
 
         vm.expectRevert(IStakingPool.StakingPoolFullExited.selector);

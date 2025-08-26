@@ -5,11 +5,17 @@ import { Base } from "./base/Base.t.sol";
 import { WithdrawalVault, IWithdrawalVault } from "src/WithdrawalVault.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
+import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
+import { StakingPool } from "src/core/StakingPool.sol";
+import { SmartOperator } from "src/core/SmartOperator.sol";
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { console2 } from "forge-std/console2.sol";
+import { IStBera } from "src/interfaces/IStBera.sol";
 
 contract WithdrawalVaultTest is Base {
+    address alice = makeAddr("alice");
+
     function setUp() public override {
         super.setUp();
         _deployStakingPoolContracts(fixtureValidatorData.pubkey);
@@ -45,246 +51,284 @@ contract WithdrawalVaultTest is Base {
         assertEq(address(withdrawalVault).balance, amount);
     }
 
-    function testFuzz_triggerWithdrawals(uint256 withdrawAmount) public {
-        uint256 maxFeeToPay = _helper_getWithdrawalFee();
-
-        uint64 amountInGWei = uint64(withdrawAmount / 1 gwei);
-        uint256 amountInWei = uint256(amountInGWei) * 1 gwei;
-
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(fixtureValidatorData.pubkey, amountInGWei, maxFeeToPay);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, amountInGWei, maxFeeToPay, makeAddr("receiver")
-        );
-
-        address sender = address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey));
-        _helper_allocateWithdrawals(sender, fixtureValidatorData.pubkey, amountInWei);
-
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), amountInWei);
+    function test_pause() public {
+        assertFalse(withdrawalVault.paused());
+        withdrawalVault.pause();
+        assertTrue(withdrawalVault.paused());
     }
 
-    function test_triggerWithdrawals_Multiple() public {
-        uint256 maxFeeToPay = _helper_getWithdrawalFee();
-
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay, makeAddr("receiver")
-        );
-
-        address sender = address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey));
-        _helper_allocateWithdrawals(sender, fixtureValidatorData.pubkey, 100 ether);
-
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 100 ether);
-
-        // Second withdrawal - Same validator
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(fixtureValidatorData.pubkey, 200 gwei, maxFeeToPay);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, 200 gwei, maxFeeToPay, makeAddr("receiver")
-        );
-
-        sender = address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey));
-        _helper_allocateWithdrawals(sender, fixtureValidatorData.pubkey, 200 ether);
-
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 300 ether);
-
-        // Third withdrawal - different validator
-        bytes memory pubkey2 = _create48Byte();
-        _deployStakingPoolContracts(pubkey2);
-
-        vm.deal(address(_getWithdrawalRequestERC721(pubkey2)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
-        vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.ELWithdrawalTriggered(pubkey2, 150 gwei, maxFeeToPay);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(pubkey2, 150 gwei, maxFeeToPay, makeAddr("receiver"));
-
-        sender = address(_getWithdrawalRequestERC721(pubkey2));
-        _helper_allocateWithdrawals(sender, pubkey2, 150 ether);
-
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 150 ether);
-    }
-
-    function test_triggerWithdrawals_RefundOverpaidFee() public {
-        address receiver = makeAddr("receiver");
-        uint64 withdrawAmount = 100 gwei;
-        uint256 fee = _helper_getWithdrawalFee();
-        uint256 maxFeeToPay = fee + 1;
-
-        assertEq(receiver.balance, 0);
-
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit ELWithdrawHelper.OverpaidFeeRefunded(receiver, fee);
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay, receiver
-        );
-
-        assertEq(receiver.balance, 1);
-    }
-
-    function test_triggerWithdrawals_Fail_InvalidSender() public {
+    function test_pause_Fail_InvalidSender() public {
         address invalidSender = makeAddr("invalidSender");
-        uint64 withdrawAmount = 100 gwei;
-        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        bytes32 defaultAdminRole = withdrawalVault.DEFAULT_ADMIN_ROLE();
 
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
         vm.prank(invalidSender);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IWithdrawalVault.InvalidSender.selector,
-                invalidSender,
-                address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey))
+                IAccessControl.AccessControlUnauthorizedAccount.selector, invalidSender, defaultAdminRole
             )
         );
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay, makeAddr("receiver")
-        );
+        withdrawalVault.pause();
     }
 
-    function test_triggerWithdrawals_Fail_OverpaidFee() public {
-        uint64 withdrawAmount = 100 gwei;
-        uint256 maxFeeToPay = _helper_getWithdrawalFee();
-        mockEIP7002.setWithdrawalFee(maxFeeToPay + 1);
-
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectRevert(abi.encodeWithSelector(IWithdrawalVault.OverpaidFee.selector));
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay }(
-            fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay, makeAddr("receiver")
-        );
+    function test_unpause() public {
+        test_pause();
+        withdrawalVault.unpause();
+        assertFalse(withdrawalVault.paused());
     }
 
-    function test_triggerWithdrawals_Fail_InsufficientFee() public {
-        uint64 withdrawAmount = 100 gwei;
-        uint256 maxFeeToPay = 100 ether;
+    function test_unpause_Fail_InvalidSender() public {
+        test_pause();
 
-        vm.deal(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)), maxFeeToPay);
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectRevert(abi.encodeWithSelector(IWithdrawalVault.InsufficientFee.selector));
-        withdrawalVault.triggerWithdrawals{ value: maxFeeToPay - 1 }(
-            fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay, makeAddr("receiver")
-        );
-    }
-
-    function testFuzz_withdrawWithdrawals(uint256 amount) public {
-        testFuzz_triggerWithdrawals(amount);
-
-        uint64 amountInGWei = uint64(amount / 1 gwei);
-        uint256 amountInWei = uint256(amountInGWei) * 1 gwei;
-
-        vm.deal(address(withdrawalVault), amountInWei);
-        assertEq(address(withdrawalVault).balance, amountInWei);
-
-        address receiver = makeAddr("receiver");
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit IWithdrawalVault.WithdrawalsWithdrawn(amountInWei);
-        withdrawalVault.withdrawWithdrawals(fixtureValidatorData.pubkey, amountInWei, receiver);
-
-        assertEq(address(withdrawalVault).balance, 0);
-        assertEq(address(receiver).balance, amountInWei);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
-    }
-
-    function testFuzz_withdrawWithdrawals_Multiple() public {
-        test_triggerWithdrawals_Multiple();
-
-        vm.deal(address(withdrawalVault), 450 ether);
-        assertEq(address(withdrawalVault).balance, 450 ether);
-
-        address receiver = makeAddr("receiver");
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit IWithdrawalVault.WithdrawalsWithdrawn(100 ether);
-        withdrawalVault.withdrawWithdrawals(fixtureValidatorData.pubkey, 100 ether, receiver);
-
-        assertEq(address(withdrawalVault).balance, 350 ether);
-        assertEq(address(receiver).balance, 100 ether);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 200 ether);
-
-        // Second withdrawal - Same validator
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectEmit(true, true, true, true);
-        emit IWithdrawalVault.WithdrawalsWithdrawn(200 ether);
-        withdrawalVault.withdrawWithdrawals(fixtureValidatorData.pubkey, 200 ether, receiver);
-
-        assertEq(address(withdrawalVault).balance, 150 ether);
-        assertEq(address(receiver).balance, 300 ether);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
-
-        // Third withdrawal - different validator
-        bytes memory pubkey2 = _create48Byte();
-
-        vm.prank(address(_getWithdrawalRequestERC721(pubkey2)));
-        vm.expectEmit(true, true, true, true);
-        emit IWithdrawalVault.WithdrawalsWithdrawn(150 ether);
-        withdrawalVault.withdrawWithdrawals(pubkey2, 150 ether, receiver);
-
-        assertEq(address(withdrawalVault).balance, 0);
-        assertEq(address(receiver).balance, 450 ether);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 0);
-    }
-
-    function test_withdrawWithdrawals_Fail_InvalidSender() public {
-        address receiver = makeAddr("receiver");
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IWithdrawalVault.InvalidSender.selector,
-                address(this),
-                address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey))
-            )
-        );
-        withdrawalVault.withdrawWithdrawals(fixtureValidatorData.pubkey, 100 ether, receiver);
-    }
-
-    function test_withdrawWithdrawals_Fail_InsufficientBalance() public {
-        testFuzz_triggerWithdrawals(1 ether);
-
-        address receiver = makeAddr("receiver");
-        vm.prank(address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey)));
-        vm.expectRevert(abi.encodeWithSelector(SafeTransferLib.ETHTransferFailed.selector));
-        withdrawalVault.withdrawWithdrawals(fixtureValidatorData.pubkey, 1 ether, receiver);
-    }
-
-    function test_allocateWithdrawals() public {
-        address sender = address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey));
-        _helper_allocateWithdrawals(sender, fixtureValidatorData.pubkey, 100 ether);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 100 ether);
-    }
-
-    function test_allocateWithdrawals_MultipleValidators() public {
-        bytes memory pubkey2 = _create48Byte();
-
-        _deployStakingPoolContracts(pubkey2);
-
-        address sender1 = address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey));
-        address sender2 = address(_getWithdrawalRequestERC721(pubkey2));
-
-        _helper_allocateWithdrawals(sender1, fixtureValidatorData.pubkey, 100 ether);
-        _helper_allocateWithdrawals(sender2, pubkey2, 200 ether);
-
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 100 ether);
-        assertEq(withdrawalVault.allocatedWithdrawalsAmount(pubkey2), 200 ether);
-    }
-
-    function test_allocateWithdrawals_Fail_InvalidSender() public {
         address invalidSender = makeAddr("invalidSender");
+        bytes32 defaultAdminRole = withdrawalVault.DEFAULT_ADMIN_ROLE();
+
+        vm.prank(invalidSender);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IWithdrawalVault.InvalidSender.selector,
-                invalidSender,
-                address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey))
+                IAccessControl.AccessControlUnauthorizedAccount.selector, invalidSender, defaultAdminRole
             )
         );
-        _helper_allocateWithdrawals(invalidSender, fixtureValidatorData.pubkey, 100 ether);
+        withdrawalVault.unpause();
+    }
+
+    function testFuzz_requestWithdrawal(uint64 withdrawAmount) public {
+        withdrawAmount = uint64(_bound(withdrawAmount, 1e9, 100_000_000 gwei));
+        uint256 amountInWei = uint256(withdrawAmount) * 1e9;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mock the staking pool response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(amountInWei, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, amountInWei, amountInWei, 0, false);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(
+            fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay
+        );
+
+        assertEq(withdrawalVault.balanceOf(alice), 1);
+        assertEq(withdrawalVault.ownerOf(0), alice);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        assertEq(request.assetsRequested, amountInWei);
+        assertEq(request.sharesBurnt, amountInWei);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), amountInWei);
+    }
+
+    function test_requestWithdrawal() public {
+        testFuzz_requestWithdrawal(100 gwei);
+    }
+
+    function test_requestWithdrawal_FullExit() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, true, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, 100 ether, 100 ether, 0, true);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        assertEq(request.assetsRequested, 100 ether);
+        assertEq(request.sharesBurnt, 100 ether);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+    }
+
+    function test_requestWithdrawal_Fail_InvalidAmount() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        vm.deal(alice, maxFeeToPay);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.InvalidAmount.selector);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 0, maxFeeToPay);
+    }
+
+    function test_requestWithdrawal_Fail_RefundOverpaidFee() public {
+        uint64 withdrawAmount = 100 gwei;
+        uint256 amountInWei = uint256(withdrawAmount) * 1e9;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mock the staking pool response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(amountInWei, false, false)
+        );
+
+        uint256 fee = maxFeeToPay + 10 ether;
+        vm.deal(alice, fee);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, amountInWei, amountInWei, 0, false);
+        withdrawalVault.requestWithdrawal{ value: fee }(fixtureValidatorData.pubkey, withdrawAmount, fee);
+
+        assertEq(address(alice).balance, fee - maxFeeToPay);
+    }
+
+    function test_requestWithdrawal_Fail_InvalidFees() public {
+        uint64 withdrawAmount = 100 gwei;
+        uint256 amountInWei = uint256(withdrawAmount) * 1e9;
+        mockEIP7002.setWithdrawalFee(10 ether);
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(amountInWei, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.OverpaidFee.selector);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, withdrawAmount, 5 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.InsufficientFee.selector);
+        withdrawalVault.requestWithdrawal{ value: 5 ether }(fixtureValidatorData.pubkey, withdrawAmount, maxFeeToPay);
+    }
+
+    function test_requestWithdrawal_Fail_Paused() public {
+        test_pause();
+
+        vm.deal(alice, 1 ether);
+        vm.prank(alice);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        withdrawalVault.requestWithdrawal{ value: 1 ether }(fixtureValidatorData.pubkey, 100 gwei, 1 ether);
+    }
+
+    function test_finalizeWithdrawalRequest() public {
+        test_requestWithdrawal();
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        vm.deal(address(withdrawalVault), request.assetsRequested);
+
+        vm.mockCall(
+            address(_getSmartOperator(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(SmartOperator.unboostedBalance.selector),
+            abi.encode(0)
+        );
+
+        vm.roll(vm.getBlockNumber() + withdrawalVault.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY());
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequestFinalized(0);
+        withdrawalVault.finalizeWithdrawalRequest(0);
+
+        request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(withdrawalVault.balanceOf(alice), 0);
+        assertEq(request.finalized, true);
+        assertEq(address(alice).balance, request.assetsRequested);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
+    }
+
+    function test_finalizeWithdrawalRequest_Fail_Paused() public {
+        test_requestWithdrawal();
+        test_pause();
+
+        vm.prank(alice);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        withdrawalVault.finalizeWithdrawalRequest(0);
+    }
+
+    function test_finalizeWithdrawalRequest_Fail_RequestAlreadyFinalized() public {
+        test_finalizeWithdrawalRequest();
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.RequestAlreadyFinalized.selector);
+        withdrawalVault.finalizeWithdrawalRequest(0);
+    }
+
+    function test_finalizeWithdrawalRequest_Fail_RequestNotReady() public {
+        test_requestWithdrawal();
+
+        vm.roll(vm.getBlockNumber() + (withdrawalVault.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY() - 1));
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.RequestNotReady.selector);
+        withdrawalVault.finalizeWithdrawalRequest(0);
+    }
+
+    function test_finalizeWithdrawalRequest_Fail_NotEnoughFunds() public {
+        test_requestWithdrawal();
+
+        vm.roll(vm.getBlockNumber() + withdrawalVault.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY());
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.NotEnoughFunds.selector);
+        withdrawalVault.finalizeWithdrawalRequest(0);
+    }
+
+    function test_finalizeWithdrawalRequests() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay * 2);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        vm.roll(vm.getBlockNumber() + withdrawalVault.WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY());
+        vm.deal(address(withdrawalVault), 200 ether);
+
+        uint256[] memory requestIds = new uint256[](2);
+        requestIds[0] = 0;
+        requestIds[1] = 1;
+
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequestFinalized(0);
+        emit IWithdrawalVault.WithdrawalRequestFinalized(1);
+        withdrawalVault.finalizeWithdrawalRequests(requestIds);
+
+        assertEq(withdrawalVault.balanceOf(alice), 0);
+        IWithdrawalVault.WithdrawalRequest memory request0 = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request0.finalized, true);
+        IWithdrawalVault.WithdrawalRequest memory request1 = withdrawalVault.getWithdrawalRequest(1);
+        assertEq(request1.finalized, true);
+        assertEq(address(alice).balance, 200 ether);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
+    }
+
+    function test_notifyFullExitFromCL() public {
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        // The function should complete without reverting
+        assertTrue(true);
+    }
+
+    function test_notifyFullExitFromCL_Fail_InvalidSender() public {
+        address invalidSender = makeAddr("invalidSender");
+        vm.prank(invalidSender);
+        vm.expectRevert(IWithdrawalVault.InvalidSender.selector);
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
     }
 
     function test_recoverERC20(uint256 amount) public {
@@ -319,16 +363,280 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.recoverERC20(address(mockERC20), receiver, 100 ether);
     }
 
-    function _helper_allocateWithdrawals(address sender, bytes memory pubkey, uint256 amount) internal {
-        vm.prank(sender);
-        withdrawalVault.allocateWithdrawals(pubkey, amount);
-    }
-
     function _helper_getWithdrawalFee() internal view returns (uint256) {
         (bool success, bytes memory data) = address(mockEIP7002).staticcall("");
         if (!success) revert();
 
         uint256 decodedFee = abi.decode(data, (uint256));
         return decodedFee;
+    }
+
+    function testFuzz_requestRedeem(uint256 shares) public {
+        shares = _bound(shares, 1 ether, 100_000 ether);
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        uint256 expectedAssets = shares; // 1:1 ratio for simplicity
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(expectedAssets, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        assertEq(withdrawalVault.balanceOf(alice), 1);
+        assertEq(withdrawalVault.ownerOf(0), alice);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        // The assetsRequested comes from the amountInWei calculated in _withdraw
+        // which is: uint256(assetsInGWei) * 1 gwei where assetsInGWei = uint64(amountInWei / 1e9)
+        uint256 expectedAssetsRequested = uint256(uint64(expectedAssets / 1e9)) * 1e9;
+        assertEq(request.assetsRequested, expectedAssetsRequested);
+        // The sharesBurnt comes from notifyWithdrawalRequest, which we mocked to return expectedAssets
+        assertEq(request.sharesBurnt, expectedAssets);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), expectedAssetsRequested);
+    }
+
+    function test_requestRedeem_WithdrawalVault() public {
+        testFuzz_requestRedeem(100 ether);
+    }
+
+    function test_requestRedeem_FullExit() public {
+        uint256 shares = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        uint256 expectedAssets = 1000 ether;
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response (full exit)
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(expectedAssets, true, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, expectedAssets, expectedAssets, 0, true);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        assertEq(request.assetsRequested, expectedAssets);
+        assertEq(request.sharesBurnt, expectedAssets);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+    }
+
+    function test_requestRedeem_ShortCircuit() public {
+        uint256 shares = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        uint256 expectedAssets = 1000 ether;
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response (short circuit)
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(expectedAssets, false, true)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, expectedAssets, expectedAssets, 0, false);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        // Should refund the fee since short circuit is triggered
+        assertEq(address(alice).balance, maxFeeToPay);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        assertEq(request.assetsRequested, expectedAssets);
+        assertEq(request.sharesBurnt, expectedAssets);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+    }
+
+    function test_requestRedeem_Fail_InvalidAmount() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        vm.deal(alice, maxFeeToPay);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.InvalidAmount.selector);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 0, maxFeeToPay);
+    }
+
+    function test_requestRedeem_Fail_Paused() public {
+        test_pause();
+
+        uint256 shares = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        vm.deal(alice, maxFeeToPay);
+
+        vm.prank(alice);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+    }
+
+    function test_requestRedeem_Fail_InvalidFees() public {
+        uint256 shares = 1000 ether;
+        uint256 expectedAssets = 1000 ether;
+        mockEIP7002.setWithdrawalFee(10 ether);
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(expectedAssets, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.OverpaidFee.selector);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, 5 ether);
+
+        vm.prank(alice);
+        vm.expectRevert(IWithdrawalVault.InsufficientFee.selector);
+        withdrawalVault.requestRedeem{ value: 5 ether }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+    }
+
+    function test_requestRedeem_RefundOverpaidFee() public {
+        uint256 shares = 1000 ether;
+        uint256 expectedAssets = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(expectedAssets, false, false)
+        );
+
+        uint256 fee = maxFeeToPay + 10 ether;
+        vm.deal(alice, fee);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, expectedAssets, expectedAssets, 0, false);
+        withdrawalVault.requestRedeem{ value: fee }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        assertEq(address(alice).balance, fee - maxFeeToPay);
+    }
+
+    function test_requestRedeem_AlreadyFullyExited() public {
+        uint256 shares = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        uint256 expectedAssets = 1000 ether;
+
+        // Mock the staking pool previewRedeem response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(shares, false, false)
+        );
+
+        // Mark the validator as fully exited
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, expectedAssets, shares, 0, false);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        // Should refund the fee since the validator is fully exited
+        assertEq(address(alice).balance, maxFeeToPay);
+
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.pubkey, fixtureValidatorData.pubkey);
+        assertEq(request.assetsRequested, expectedAssets);
+        assertEq(request.sharesBurnt, shares);
+        assertEq(request.user, alice);
+        assertEq(request.requestBlock, block.number);
+        assertEq(request.finalized, false);
+    }
+
+    function test_requestRedeem_ConvertsSharesToAssets() public {
+        uint256 shares = 1000 ether;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+        uint256 expectedAssets = 1500 ether; // 1.5:1 ratio
+
+        // Mock the staking pool previewRedeem response with different ratio
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(IStBera.previewRedeem.selector, shares),
+            abi.encode(expectedAssets)
+        );
+
+        // Mock the staking pool notifyWithdrawalRequest response
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(shares, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.WithdrawalRequested(alice, expectedAssets, shares, 0, false);
+        withdrawalVault.requestRedeem{ value: maxFeeToPay }(fixtureValidatorData.pubkey, shares, maxFeeToPay);
+
+        // Verify the conversion happened correctly
+        IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
+        assertEq(request.assetsRequested, expectedAssets);
+        assertEq(request.sharesBurnt, shares);
+        assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), expectedAssets);
     }
 }

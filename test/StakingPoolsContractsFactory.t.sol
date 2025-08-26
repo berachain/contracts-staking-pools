@@ -17,7 +17,6 @@ contract StakingPoolsContractsFactoryTest is Base {
         SmartOperator,
         StakingPool,
         StakingRewardsVault,
-        WithdrawalRequestERC721,
         IncentiveCollector
     }
 
@@ -60,13 +59,8 @@ contract StakingPoolsContractsFactoryTest is Base {
 
         StakingPoolContractsFactory.CoreContracts memory coreContracts =
             stakingPoolContractsFactory.predictStakingPoolContractsAddresses(pubkey);
-        (
-            address smartOperator,
-            address stakingPool,
-            address stakingRewardsVault,
-            address withdrawalRequestERC721,
-            address incentiveCollector
-        ) = stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) =
+        stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
             pubkey, withdrawalCredentials, _create96Byte(), address(this), address(this)
         );
 
@@ -77,7 +71,6 @@ contract StakingPoolsContractsFactoryTest is Base {
         assertEq(smartOperator, coreContracts.smartOperator);
         assertEq(stakingPool, coreContracts.stakingPool);
         assertEq(stakingRewardsVault, coreContracts.stakingRewardsVault);
-        assertEq(withdrawalRequestERC721, coreContracts.withdrawalRequestERC721);
         assertEq(incentiveCollector, coreContracts.incentiveCollector);
     }
 
@@ -186,8 +179,6 @@ contract StakingPoolsContractsFactoryTest is Base {
             stakingPoolContractsFactory.upgradeStakingPoolBeaconImpl(newImplementation);
         } else if (beacon == BeaconType.StakingRewardsVault) {
             stakingPoolContractsFactory.upgradeStakingRewardsVaultBeaconImpl(newImplementation);
-        } else if (beacon == BeaconType.WithdrawalRequestERC721) {
-            stakingPoolContractsFactory.upgradeWithdrawalRequestERC721BeaconImpl(newImplementation);
         } else if (beacon == BeaconType.IncentiveCollector) {
             stakingPoolContractsFactory.upgradeIncentiveCollectorBeaconImpl(newImplementation);
         } else {
@@ -206,10 +197,6 @@ contract StakingPoolsContractsFactoryTest is Base {
         } else if (beacon == BeaconType.StakingRewardsVault) {
             return _getBeaconImplementationAddressFromERC1967Proxy(
                 address(_getStakingRewardsVault(fixtureValidatorData.pubkey))
-            );
-        } else if (beacon == BeaconType.WithdrawalRequestERC721) {
-            return _getBeaconImplementationAddressFromERC1967Proxy(
-                address(_getWithdrawalRequestERC721(fixtureValidatorData.pubkey))
             );
         } else if (beacon == BeaconType.IncentiveCollector) {
             return _getBeaconImplementationAddressFromERC1967Proxy(
@@ -236,8 +223,6 @@ contract StakingPoolsContractsFactoryTest is Base {
             emit IStakingPoolContractsFactory.StakingPoolBeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.StakingRewardsVault) {
             emit IStakingPoolContractsFactory.StakingRewardsVaultBeaconImplUpgraded(newImpl);
-        } else if (beacon == BeaconType.WithdrawalRequestERC721) {
-            emit IStakingPoolContractsFactory.WithdrawalRequestERC721BeaconImplUpgraded(newImpl);
         } else if (beacon == BeaconType.IncentiveCollector) {
             emit IStakingPoolContractsFactory.IncentiveCollectorBeaconImplUpgraded(newImpl);
         } else {

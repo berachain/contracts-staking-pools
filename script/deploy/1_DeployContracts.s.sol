@@ -13,8 +13,7 @@ import {
     WITHDRAWAL_VAULT_ADDRESS,
     SMART_OPERATOR_IMPL_ADDRESS,
     STAKING_POOL_IMPL_ADDRESS,
-    STAKING_REWARDS_VAULT_IMPL_ADDRESS,
-    WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS
+    STAKING_REWARDS_VAULT_IMPL_ADDRESS
 } from "script/Addresses.sol";
 import {
     ACCOUNTING_ORACLE_PROXY_SALT,
@@ -35,7 +34,6 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
         _validateCode("Smart Operator Impl", SMART_OPERATOR_IMPL_ADDRESS);
         _validateCode("Staking Pool Impl", STAKING_POOL_IMPL_ADDRESS);
         _validateCode("Staking Rewards Vault Impl", STAKING_REWARDS_VAULT_IMPL_ADDRESS);
-        _validateCode("Withdrawal Request ERC721 Impl", WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS);
 
         deployer = new Deployer(
             msg.sender,
@@ -45,7 +43,6 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
             SMART_OPERATOR_IMPL_ADDRESS,
             STAKING_POOL_IMPL_ADDRESS,
             STAKING_REWARDS_VAULT_IMPL_ADDRESS,
-            WITHDRAWAL_REQUEST_ERC721_IMPL_ADDRESS,
             INCENTIVE_COLLECTOR_IMPL_ADDRESS
         );
 

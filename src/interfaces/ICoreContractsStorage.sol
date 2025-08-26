@@ -6,7 +6,6 @@ interface ICoreContractsStorage {
         address smartOperator;
         address stakingPool;
         address stakingRewardsVault;
-        address withdrawalRequestERC721;
         address incentiveCollector;
     }
 

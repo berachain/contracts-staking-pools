@@ -7,12 +7,10 @@ import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { MockERC20 } from "./mock/MockERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
-import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 
 contract SmartOperatorTest is Base {
     SmartOperator smartOperator;
-    WithdrawalRequestERC721 withdrawalRequestERC721;
     StakingPool stakingPool;
 
     address validatorFeeManager = makeAddr("validatorFeeManager");
@@ -22,7 +20,6 @@ contract SmartOperatorTest is Base {
         _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
         smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
-        withdrawalRequestERC721 = _getWithdrawalRequestERC721(fixtureValidatorData.pubkey);
         stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
     }
 
@@ -229,7 +226,7 @@ contract SmartOperatorTest is Base {
         smartOperator.setProtocolFeePercentage(0);
 
         address receiver = makeAddr("receiver");
-        vm.prank(address(withdrawalRequestERC721));
+        vm.prank(address(withdrawalVault));
         vm.expectEmit(true, true, true, true);
         emit ISmartOperator.BGTRedeemed(receiver, 100 ether);
         smartOperator.fullExitRedeemBGT(receiver);
@@ -252,7 +249,7 @@ contract SmartOperatorTest is Base {
         uint256 snapshot = vm.snapshotState();
 
         address receiver = makeAddr("receiver");
-        vm.prank(address(withdrawalRequestERC721));
+        vm.prank(address(withdrawalVault));
         vm.expectEmit(true, true, true, true);
         emit ISmartOperator.BGTRedeemed(receiver, 100 ether);
         smartOperator.fullExitRedeemBGT(receiver);
@@ -268,7 +265,7 @@ contract SmartOperatorTest is Base {
         uint256 expectedFeeSharesMinted = stakingPool.previewDeposit(10 ether); // 10% of 100 ether
 
         receiver = makeAddr("receiver");
-        vm.prank(address(withdrawalRequestERC721));
+        vm.prank(address(withdrawalVault));
         vm.expectEmit(true, true, true, true);
         emit ISmartOperator.BGTRedeemed(receiver, 200 ether);
         smartOperator.fullExitRedeemBGT(receiver);
@@ -310,9 +307,9 @@ contract SmartOperatorTest is Base {
 
     function test_queueBoost_Fail_StakingPoolFullExited() public {
         // set isFullExited to true
-        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(64))));
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
         uint256 newValue = currentValue | (1 << 8);
-        vm.store(address(stakingPool), bytes32(uint256(64)), bytes32(newValue));
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
 
         vm.expectRevert(ISmartOperator.StakingPoolIsFullExited.selector);
         smartOperator.queueBoost();

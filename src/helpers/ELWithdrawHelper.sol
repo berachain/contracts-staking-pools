@@ -49,7 +49,7 @@ abstract contract ELWithdrawHelper {
         return fee;
     }
 
-    function _triggerEligibleWithdrawal(bytes memory pubkey, uint64 amount, uint256 fee) internal {
+    function _triggerExecutionLayerWithdrawal(bytes memory pubkey, uint64 amount, uint256 fee) internal {
         bytes memory rawCallData = abi.encodePacked(pubkey, amount);
 
         (bool success,) = EIP_7002.call{ value: fee }(rawCallData);

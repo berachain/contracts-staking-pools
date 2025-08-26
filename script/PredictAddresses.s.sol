@@ -7,7 +7,6 @@ import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
-import { WithdrawalRequestERC721 } from "src/core/WithdrawalRequestERC721.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import {
@@ -41,7 +40,6 @@ contract ImplementationPredictAddressesScript is BasePredictScript {
         _predictAddress("StakingPool Implementation", type(StakingPool).creationCode, 0);
         _predictAddress("SmartOperator Implementation", type(SmartOperator).creationCode, 0);
         _predictAddress("StakingRewardsVault Implementation", type(StakingRewardsVault).creationCode, 0);
-        _predictAddress("WithdrawalRequestERC721 Implementation", type(WithdrawalRequestERC721).creationCode, 0);
         _predictAddress("IncentiveCollector Implementation", type(IncentiveCollector).creationCode, 0);
     }
 }
