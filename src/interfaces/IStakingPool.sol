@@ -9,7 +9,7 @@ interface IStakingPool {
     event MaxCapacityReached(bytes pubkey);
     event FullExitTriggered();
     event TotalDepositsUpdated(uint256 newTotalDeposits);
-    event ActiveTresholdReached();
+    event ActiveThresholdReached();
     event MinEffectiveBalanceUpdated(uint256 newMinEffectiveBalance);
 
     // ERRORS
@@ -32,7 +32,7 @@ interface IStakingPool {
     // GETTERS
 
     /// @notice Returns true if the staking pool has been dismissed.
-    function isFullExited() external view returns (bool);
+    function isFullyExited() external view returns (bool);
 
     /// @notice Returns the minimum effective balance for the staking pool.
     /// @dev If not set, returns the default minimum effective balance.
@@ -50,7 +50,7 @@ interface IStakingPool {
 
     /// @notice A payable function for execution layer rewards.
     /// @dev Can only be called by the `StakingRewardsVault`.
-    /// @dev Need a dedicated function because funds receive() is treated as user deposit.
+    /// @dev A dedicated function is needed because the receive() function is treated as a user deposit.
     function receiveRewards() external payable;
 
     /// @notice Sets the minimum effective balance for the staking pool.
@@ -61,12 +61,12 @@ interface IStakingPool {
 
     /// @notice Processes a withdrawal request from a user by burning their shares.
     /// @dev Can only be called by the withdrawal request ERC721 contract.
-    /// If the pool has not reached the activation treshold yet, assets will be transferred to withdrawal vault.
-    /// If the pool has reached the activation treshold, withdrawals are frozen for the cooldown period.
+    /// If the pool has not reached the activation threshold yet, assets will be transferred to the withdrawal vault.
+    /// If the pool has reached the activation threshold, withdrawals are frozen for the cooldown period.
     /// @param user The address of the user requesting withdrawal.
     /// @param assets The amount of BERA to withdraw.
     /// @return sharesToBurn The amount of shares that were burned.
-    /// @return isFullExited Whether the pool has fully exited.
+    /// @return isFullyExited Whether the pool has fully exited.
     /// @return isShortCircuit Whether the withdrawal request is short-circuited.
     /// @custom:throws InvalidSender if not called by withdrawalRequestERC721.
     /// @custom:throws WithdrawalNotAllowed if withdrawal cooldown period has not elapsed.
@@ -76,7 +76,7 @@ interface IStakingPool {
         uint256 assets
     )
         external
-        returns (uint256 sharesToBurn, bool isFullExited, bool isShortCircuit);
+        returns (uint256 sharesToBurn, bool isFullyExited, bool isShortCircuit);
 
     /// @notice Updates the total deposits of the staking pool.
     /// @dev Meant to be called by the accounting oracle to align total deposits with CL data.

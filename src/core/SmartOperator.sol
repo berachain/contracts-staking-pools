@@ -59,6 +59,13 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
     uint96 public protocolFeePercentage;
 
+    modifier whenNotFullyExited() {
+        if (IStakingPool(_stakingPool).isFullyExited()) {
+            revert StakingPoolIsFullyExited();
+        }
+        _;
+    }
+
     constructor() {
         _disableInitializers();
     }
@@ -93,11 +100,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
-    function queueBoost() external returns (bool) {
-        if (IStakingPool(_stakingPool).isFullExited()) {
-            revert StakingPoolIsFullExited();
-        }
-
+    function queueBoost() external whenNotFullyExited returns (bool) {
         (, uint128 queuedBalance) = BGT.boostedQueue(address(this), _pubkey);
         if (queuedBalance == 0) {
             uint256 amount = BGT.unboostedBalanceOf(address(this));
@@ -137,11 +140,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         BGT.dropBoost(address(this), _pubkey);
     }
 
-    function redeemBGT(uint256 amount) external onlyRole(BGT_MANAGER_ROLE) {
-        if (IStakingPool(_stakingPool).isFullExited()) {
-            revert StakingPoolIsFullExited();
-        }
-
+    function redeemBGT(uint256 amount) external whenNotFullyExited onlyRole(BGT_MANAGER_ROLE) {
         _updateEarnedBGTFees();
 
         BGT.redeem(_stakingRewardsVault, amount);
@@ -254,10 +253,6 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     /// @notice Sets the protocol fee percentage for the smart operator.
     /// @param protocolFeePercentage_ The protocol fee percentage to set for the smart operator.
     function setProtocolFeePercentage(uint96 protocolFeePercentage_) external onlyRole(PROTOCOL_FEE_MANAGER_ROLE) {
-        if (IStakingPool(_stakingPool).isFullExited()) {
-            revert StakingPoolIsFullExited();
-        }
-
         if (protocolFeePercentage_ > MAX_PROTOCOL_FEE) {
             revert InvalidProtocolFeePercentage();
         }

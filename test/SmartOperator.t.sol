@@ -306,12 +306,12 @@ contract SmartOperatorTest is Base {
     }
 
     function test_queueBoost_Fail_StakingPoolFullExited() public {
-        // set isFullExited to true
+        // set isFullyExited to true
         uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
         uint256 newValue = currentValue | (1 << 8);
         vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
 
-        vm.expectRevert(ISmartOperator.StakingPoolIsFullExited.selector);
+        vm.expectRevert(ISmartOperator.StakingPoolIsFullyExited.selector);
         smartOperator.queueBoost();
     }
 }

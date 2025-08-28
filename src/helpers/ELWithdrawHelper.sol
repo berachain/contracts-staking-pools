@@ -14,7 +14,7 @@ abstract contract ELWithdrawHelper {
 
     /// @notice Emitted when fee passed for withdrawal exceeds necessary amount.
     /// @param receiver The wallet receiving the refund.
-    /// @param amount The refunded amoint.
+    /// @param amount The refunded amount.
     event OverpaidFeeRefunded(address receiver, uint256 amount);
 
     // ERRORS

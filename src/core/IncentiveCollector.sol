@@ -75,8 +75,8 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
 
     /// @inheritdoc IIncentiveCollector
     function claim(address[] calldata tokens) external payable {
-        if (IStakingPool(_stakingPool).isFullExited()) {
-            revert NodeIsFullExited();
+        if (IStakingPool(_stakingPool).isFullyExited()) {
+            revert NodeIsFullyExited();
         }
 
         if (msg.value != payoutAmount) {

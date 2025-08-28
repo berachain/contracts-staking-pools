@@ -18,7 +18,7 @@ import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
     // CONSTANTS
 
-    /// @dev Referece to BeaconDepositContract on Berachain.
+    /// @dev Reference to BeaconDepositContract on Berachain.
     IBeaconDeposit public constant BEACON_DEPOSIT = IBeaconDeposit(0x4242424242424242424242424242424242424242);
 
     /// @dev Minimum amount for deposit to CL (see BeaconDepositContract).
@@ -30,7 +30,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     /// @dev Maximum amount to be deposited for a validator on Berachain.
     uint256 public constant MAX_EFFECTIVE_BALANCE = 10_000_000 ether;
 
-    /// @dev Once minEffectiveBalance is deposited, withdrawal are disabled for a cool down period (~1 day)
+    /// @dev Once minEffectiveBalance is deposited, withdrawals are disabled for a cooldown period (~1 day)
     uint64 public constant ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS = 43_200;
 
     // STORAGE
@@ -49,10 +49,10 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     uint256 internal _minEffectiveBalance;
 
     bool public isActive;
-    bool public isFullExited;
+    bool public isFullyExited;
     uint256 public bufferedAssets;
     uint256 public totalDeposits;
-    bool public activeTresholdReached;
+    bool public activeThresholdReached;
 
     constructor() {
         _disableInitializers();
@@ -91,7 +91,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
     /// @inheritdoc IStakingPool
     function unpause() external onlyOwner {
-        if (isFullExited) {
+        if (isFullyExited) {
             revert StakingPoolFullExited();
         }
         _unpause();
@@ -151,21 +151,21 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         uint256 amountOfSharesToBurn = previewWithdraw(assets);
         _burnShares(user, amountOfSharesToBurn);
 
-        // Short circuit withdrawal request if buffered assets are enough to cover the request and active treshold is
-        // not reached.
-        if (!activeTresholdReached && (bufferedAssets >= assets)) {
+        // Short-circuit withdrawal request if buffered assets are sufficient to cover the request and active threshold
+        // is not reached.
+        if (!activeThresholdReached && (bufferedAssets >= assets)) {
             SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
             bufferedAssets -= assets;
-            return (amountOfSharesToBurn, isFullExited, true);
+            return (amountOfSharesToBurn, isFullyExited, true);
         }
 
-        // If short circuit is not triggered, check if withdrawal is allowed
+        // If short-circuit is not triggered, check if withdrawal is allowed
         if (block.number < _validatorActivationBlock + ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS) {
             revert WithdrawalNotAllowed();
         }
 
-        // If pool is not full exited, update total deposits and trigger full exit if necessary
-        if (!isFullExited) {
+        // If pool is not fully exited, update total deposits and trigger full exit if necessary
+        if (!isFullyExited) {
             totalDeposits -= assets;
             if (totalDeposits < minEffectiveBalance()) {
                 _triggerFullExit();
@@ -174,7 +174,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
             _frozenTotalAssets -= assets;
         }
 
-        return (amountOfSharesToBurn, isFullExited, false);
+        return (amountOfSharesToBurn, isFullyExited, false);
     }
 
     /// @inheritdoc IStakingPool
@@ -235,7 +235,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         bufferedAssets = updatedBufferedAssets;
 
         if (_canDeposit()) {
-            // Deposit contract accept only multiple of 1 gwei as deposit amount.
+            // Deposit contract accepts only multiples of 1 gwei as deposit amount.
             // Round down to nearest gwei and deposit
             uint256 depositAmount = (bufferedAssets / 1 gwei) * 1 gwei;
             _depositToConsensusLayer(depositAmount);
@@ -268,13 +268,13 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     ///    meet the minEffectiveBalance requirement.
     /// 2. If above minEffectiveBalance, check:
     ///    - buffered assets are >= MIN_CL_DEPOSIT_AMOUNT
-    ///    - remaining capacity after deposit to be 0 or >= MIN_CL_DEPOSIT_AMOUNT, to avoid residuals.
+    ///    - remaining capacity after deposit is 0 or >= MIN_CL_DEPOSIT_AMOUNT, to avoid residuals.
     function _canDeposit() internal returns (bool) {
-        if (!activeTresholdReached) {
+        if (!activeThresholdReached) {
             if (totalDeposits + bufferedAssets >= minEffectiveBalance()) {
-                activeTresholdReached = true;
+                activeThresholdReached = true;
                 _validatorActivationBlock = block.number;
-                emit ActiveTresholdReached();
+                emit ActiveThresholdReached();
                 return true;
             }
             return false;
@@ -286,8 +286,8 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     }
 
     /// @dev Processes a user's deposit and determines how it should be handled:
-    /// - check if the pool has enough capacity
-    /// - compute optional refund amount (if capacity excedeed)
+    /// - check if the pool has sufficient capacity
+    /// - compute optional refund amount (if capacity exceeded)
     /// - determine reward amount to be collected
     /// @param userDepositAmount How much the user wants to deposit.
     /// @return updatedBufferedAssets Total amount that will be held in the buffer after this submission.
@@ -314,7 +314,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         // Calculate how much additional deposit we can accept beyond current buffer
         uint256 additionalDeposit = updatedBufferedAssets - bufferedAssets;
 
-        // If we can't accept full user deposit, calculate refund
+        // If we cannot accept full user deposit, calculate refund
         if (additionalDeposit < userDepositAmount) {
             effectiveUserDeposit = additionalDeposit;
             refundAmount = userDepositAmount - additionalDeposit;
@@ -325,12 +325,12 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     }
 
     /// @dev Returns the total assets managed by this contract as the sum of:
-    /// - total deposits sent to CL
+    /// - total deposits sent to consensus layer
     /// - assets currently buffered in this contract
     /// - staking rewards held in the associated vault
     /// - BGT tokens held by the smart operator
     function _getTotalAssets() internal view virtual override returns (uint256) {
-        if (isFullExited) {
+        if (isFullyExited) {
             return _frozenTotalAssets;
         }
 
@@ -370,7 +370,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         }
 
         IWithdrawalVault(_withdrawalVault).notifyFullExitFromCL(_pubkey);
-        isFullExited = true;
+        isFullyExited = true;
         _pause();
 
         emit FullExitTriggered();

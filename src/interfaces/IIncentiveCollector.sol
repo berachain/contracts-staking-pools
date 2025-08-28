@@ -49,8 +49,8 @@ interface IIncentiveCollector {
     error IncorrectPayoutAmount();
     // Signature: 0x90b8ec18
     error TransferFailed();
-    // Signature: 0xb9bf4d31
-    error NodeIsFullExited();
+    // Signature: 0xf3f874a0
+    error NodeIsFullyExited();
     // Signature: 0x546c7600
     error PayoutAmountIsZero();
 

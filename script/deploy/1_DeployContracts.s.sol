@@ -29,7 +29,7 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
     }
 
     function deployContracts() internal {
-        console2.log("Deploying AccoutingOracle, StakingPoolContractsFactory and WithdrawalVault...");
+        console2.log("Deploying AccountingOracle, StakingPoolContractsFactory and WithdrawalVault...");
         _validateCode("Incentive Collector Impl", INCENTIVE_COLLECTOR_IMPL_ADDRESS);
         _validateCode("Smart Operator Impl", SMART_OPERATOR_IMPL_ADDRESS);
         _validateCode("Staking Pool Impl", STAKING_POOL_IMPL_ADDRESS);

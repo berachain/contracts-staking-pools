@@ -80,7 +80,7 @@ contract StakingPoolContractsFactory is
         _validateInputs(pubkey, withdrawalCredentials);
 
         CoreContracts memory coreContracts =
-            _deployAndInizializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
+            _deployAndInitializeCoreContracts(pubkey, validatorAdmin, defaultSharesRecipient);
 
         _performFirstDeposit(pubkey, withdrawalCredentials, signature, coreContracts.smartOperator);
 
@@ -306,7 +306,7 @@ contract StakingPoolContractsFactory is
         }
     }
 
-    function _deployAndInizializeCoreContracts(
+    function _deployAndInitializeCoreContracts(
         bytes memory pubkey,
         address validatorAdmin,
         address defaultSharesRecipient

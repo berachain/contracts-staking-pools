@@ -15,8 +15,8 @@ interface ISmartOperator {
     error InvalidAmount();
     // Signature: 0x90b8ec18
     error TransferFailed();
-    // Signature: 0x69de7e5d
-    error StakingPoolIsFullExited();
+    // Signature: 0x32e1a5be
+    error StakingPoolIsFullyExited();
 
     // EVENTS
 

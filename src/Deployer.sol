@@ -48,7 +48,7 @@ contract Deployer is Create2Deployer {
         // deploy withdrawal vault proxy
         withdrawalVault = WithdrawalVault(payable(deployProxyWithCreate2(withdrawalVaultImpl, withdrawalVaultSalt)));
 
-        // initalize the accounting oracle
+        // initialize the accounting oracle
         accountingOracle.initialize(governance, address(stakingPoolContractsFactory));
 
         // initialize the withdrawal vault
