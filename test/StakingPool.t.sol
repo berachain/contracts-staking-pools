@@ -81,10 +81,6 @@ contract StakingPoolTest is Base {
         stakingPool.receiveRewards{ value: 10_000 ether }();
     }
 
-    function test_ab() public {
-        testFuzz_submit(2_204_275_677_615_274_921_499_218_325_241);
-    }
-
     function testFuzz_submit(uint256 userDepositAmount) public returns (uint256, uint256, uint256) {
         test_activate();
 
@@ -148,6 +144,25 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(bob)), userDepositAmount);
         assertEq(stakingPool.bufferedAssets(), expectedBufferedAssets);
         assertEq(stakingPool.totalDeposits(), expectedTotalDeposits);
+    }
+
+    function testFuzz_submit_triggerFirstDeposit_NotEnoughBufferedAssets(uint256 userDepositAmount) public {
+        // activate pool with almost enough assets to trigger first deposit
+        uint256 almostEnoughAssets = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1;
+        vm.deal(address(stakingPool), almostEnoughAssets);
+        vm.prank(address(stakingPoolContractsFactory));
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingPoolActivated();
+        stakingPool.activate(almostEnoughAssets);
+
+        // submit more assets than the pool has buffered assets
+        userDepositAmount = bound(userDepositAmount, 1, (stakingPool.MIN_CL_DEPOSIT_AMOUNT() - 1));
+        _helper_submit(alice, userDepositAmount);
+
+        assertLt(stakingPool.bufferedAssets(), stakingPool.MIN_CL_DEPOSIT_AMOUNT());
+        assertEq(stakingPool.totalDeposits(), almostEnoughAssets);
+        assertFalse(stakingPool.activeThresholdReached());
+        assertEq(stakingPool.balanceOf(alice), userDepositAmount);
     }
 
     function testFuzz_submit_correctShares(uint256 userDepositAmount) public {

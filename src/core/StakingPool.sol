@@ -264,14 +264,25 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     }
 
     /// @dev Determines if the current buffered assets can be deposited to the consensus layer.
-    /// 1. If below minEffectiveBalance, check if total deposits plus buffered assets
-    ///    meet the minEffectiveBalance requirement.
-    /// 2. If above minEffectiveBalance, check:
-    ///    - buffered assets are >= MIN_CL_DEPOSIT_AMOUNT
-    ///    - remaining capacity after deposit is 0 or >= MIN_CL_DEPOSIT_AMOUNT, to avoid residuals.
+    /// @dev The function ensure that:
+    ///         - Buffered assets are >= MIN_CL_DEPOSIT_AMOUNT.
+    /// @dev Then checks two scenarios:
+    /// @dev 1. For inactive validators (below minEffectiveBalance):
+    ///         Checks if total deposits plus buffered assets meet the minEffectiveBalance requirement.
+    /// @dev 2. For active validators (above minEffectiveBalance):
+    ///         - Ensures remaining capacity after deposit will be either 0 or >= MIN_CL_DEPOSIT_AMOUNT
+    ///           to avoid small unusable residual amounts.
+    /// @return bool Returns true if deposits can be made to consensus layer, false otherwise.
     function _canDeposit() internal returns (bool) {
+        // Early return if buffered assets are below minimum deposit amount
+        if (bufferedAssets < MIN_CL_DEPOSIT_AMOUNT) {
+            return false;
+        }
+
+        // Check if activation threshold is reached
         if (!activeThresholdReached) {
-            if (totalDeposits + bufferedAssets >= minEffectiveBalance()) {
+            uint256 totalBalance = totalDeposits + bufferedAssets;
+            if (totalBalance >= minEffectiveBalance()) {
                 activeThresholdReached = true;
                 _validatorActivationBlock = block.number;
                 emit ActiveThresholdReached();
@@ -280,9 +291,9 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
             return false;
         }
 
+        // For active validators, check remaining capacity
         uint256 remainingCapacity = MAX_EFFECTIVE_BALANCE - totalDeposits - bufferedAssets;
-        return bufferedAssets >= MIN_CL_DEPOSIT_AMOUNT
-            && (remainingCapacity == 0 || remainingCapacity >= MIN_CL_DEPOSIT_AMOUNT);
+        return remainingCapacity == 0 || remainingCapacity >= MIN_CL_DEPOSIT_AMOUNT;
     }
 
     /// @dev Processes a user's deposit and determines how it should be handled:
