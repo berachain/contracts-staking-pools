@@ -99,10 +99,14 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
 
         // Accrue fees to smart operator.
         uint256 fee = _computeFee(payoutAmount);
-        ISmartOperator(_smartOperator).accrueIncentivesFees(fee);
+        uint256 netPayoutAmount = payoutAmount - fee;
 
-        // Transfer the payout to staking rewards vault.
-        SafeTransferLib.safeTransferETH(_stakingRewardsVault, payoutAmount);
+        // Distribute net amount to existing shareholders first.
+        SafeTransferLib.safeTransferETH(_stakingRewardsVault, netPayoutAmount);
+
+        // Mint fee share and transfer the fee amount to staking rewards vault.
+        ISmartOperator(_smartOperator).accrueIncentivesFees(fee);
+        SafeTransferLib.safeTransferETH(_stakingRewardsVault, fee);
 
         emit IncentiveTokensClaimed(msg.sender, payoutAmount, fee);
 
