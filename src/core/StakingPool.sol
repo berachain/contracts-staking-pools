@@ -28,8 +28,8 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
     /// @dev Maximum amount to be deposited for a validator on Berachain.
     uint256 public constant MAX_EFFECTIVE_BALANCE = 10_000_000 ether;
 
-    /// @dev Once minEffectiveBalance is deposited, withdrawals are disabled for a cooldown period (~1 day)
-    uint64 public constant ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS = 43_200;
+    /// @dev Once minEffectiveBalance is deposited, withdrawals are disabled for a cooldown period (~3 day)
+    uint64 public constant ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS = 129_600;
 
     // STORAGE
 
