@@ -180,8 +180,7 @@ contract WithdrawalVault is
             assetsRequested: assets,
             sharesBurnt: shares,
             user: msg.sender,
-            requestBlock: block.number,
-            finalized: false
+            requestBlock: block.number
         });
 
         _mint(msg.sender, newRequestId);
@@ -239,8 +238,8 @@ contract WithdrawalVault is
     /// @dev Finalizes a withdrawal request
     function _finalizeWithdrawalRequest(uint256 requestId) internal {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
-        if (request.finalized) {
-            revert RequestAlreadyFinalized();
+        if (request.requestBlock == 0) {
+            revert InvalidRequest();
         }
 
         if (block.number < (request.requestBlock + WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY)) {
@@ -259,9 +258,9 @@ contract WithdrawalVault is
 
         allocatedWithdrawalsAmount[request.pubkey] -= request.assetsRequested;
         SafeTransferLib.safeTransferETH(request.user, request.assetsRequested);
-        request.finalized = true;
         _burn(requestId);
 
         emit WithdrawalRequestFinalized(requestId);
+        delete withdrawalRequests[requestId];
     }
 }

@@ -15,6 +15,7 @@ import { IStBera } from "src/interfaces/IStBera.sol";
 
 contract WithdrawalVaultTest is Base {
     address alice = makeAddr("alice");
+    address bob = makeAddr("bob");
 
     function setUp() public override {
         super.setUp();
@@ -120,7 +121,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, amountInWei);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), amountInWei);
     }
 
@@ -149,7 +149,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, 100 ether);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
     }
 
     function test_requestWithdrawal_Fail_InvalidAmount() public {
@@ -221,6 +220,8 @@ contract WithdrawalVaultTest is Base {
         IWithdrawalVault.WithdrawalRequest memory request = withdrawalVault.getWithdrawalRequest(0);
         vm.deal(address(withdrawalVault), request.assetsRequested);
 
+        uint256 assetsRequested = request.assetsRequested;
+
         vm.mockCall(
             address(_getSmartOperator(fixtureValidatorData.pubkey)),
             abi.encodeWithSelector(SmartOperator.unboostedBalance.selector),
@@ -236,8 +237,8 @@ contract WithdrawalVaultTest is Base {
 
         request = withdrawalVault.getWithdrawalRequest(0);
         assertEq(withdrawalVault.balanceOf(alice), 0);
-        assertEq(request.finalized, true);
-        assertEq(address(alice).balance, request.assetsRequested);
+        assertEq(request.requestBlock, 0);
+        assertEq(address(alice).balance, assetsRequested);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
     }
 
@@ -250,11 +251,11 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.finalizeWithdrawalRequest(0);
     }
 
-    function test_finalizeWithdrawalRequest_Fail_RequestAlreadyFinalized() public {
+    function test_finalizeWithdrawalRequest_Fail_InvalidRequest() public {
         test_finalizeWithdrawalRequest();
 
         vm.prank(alice);
-        vm.expectRevert(IWithdrawalVault.RequestAlreadyFinalized.selector);
+        vm.expectRevert(IWithdrawalVault.InvalidRequest.selector);
         withdrawalVault.finalizeWithdrawalRequest(0);
     }
 
@@ -309,9 +310,9 @@ contract WithdrawalVaultTest is Base {
 
         assertEq(withdrawalVault.balanceOf(alice), 0);
         IWithdrawalVault.WithdrawalRequest memory request0 = withdrawalVault.getWithdrawalRequest(0);
-        assertEq(request0.finalized, true);
+        assertEq(request0.requestBlock, 0);
         IWithdrawalVault.WithdrawalRequest memory request1 = withdrawalVault.getWithdrawalRequest(1);
-        assertEq(request1.finalized, true);
+        assertEq(request1.requestBlock, 0);
         assertEq(address(alice).balance, 200 ether);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), 0);
     }
@@ -407,7 +408,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, expectedAssets);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), expectedAssetsRequested);
     }
 
@@ -446,7 +446,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, expectedAssets);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
     }
 
     function test_requestRedeem_ShortCircuit() public {
@@ -483,7 +482,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, expectedAssets);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
     }
 
     function test_requestRedeem_Fail_InvalidAmount() public {
@@ -605,7 +603,6 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, shares);
         assertEq(request.user, alice);
         assertEq(request.requestBlock, block.number);
-        assertEq(request.finalized, false);
     }
 
     function test_requestRedeem_ConvertsSharesToAssets() public {

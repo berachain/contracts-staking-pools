@@ -34,8 +34,8 @@ interface IWithdrawalVault {
     error InsufficientFee();
     // Signature: 0x2c5211c6
     error InvalidAmount();
-    // Signature: 0xf1a60193
-    error RequestAlreadyFinalized();
+    // Signature: 0x41abc801
+    error InvalidRequest();
     // Signature: 0xecc7a37c
     error RequestNotReady();
     // Signature: 0x81b5ad68
@@ -50,14 +50,12 @@ interface IWithdrawalVault {
     /// @param sharesBurnt The amount of shares burned for the withdrawal.
     /// @param user The address of the user who requested the withdrawal.
     /// @param requestBlock The block number when the withdrawal request was made.
-    /// @param finalized Indicates if the withdrawal request has been finalized.
     struct WithdrawalRequest {
         bytes pubkey;
         uint256 assetsRequested;
         uint256 sharesBurnt;
         address user;
         uint256 requestBlock;
-        bool finalized;
     }
 
     // FUNCTIONS
