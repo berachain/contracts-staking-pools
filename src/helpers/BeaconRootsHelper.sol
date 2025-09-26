@@ -11,6 +11,7 @@ abstract contract BeaconRootsHelper {
     error InvalidProof();
     error InvalidBalance();
     error IndexOutOfRange();
+    error InvalidBeaconBlockRoot();
 
     /// @notice Emitted when the zero validator pubkey Generalized Index is changed.
     event ZeroValidatorPubkeyGIndexChanged(uint64 newZeroValidatorPubkeyGIndex);
@@ -72,7 +73,11 @@ abstract contract BeaconRootsHelper {
     }
 
     function _getBeaconBlockRoot(uint64 timestamp) internal view returns (bytes32) {
-        return timestamp.getParentBlockRootAt();
+        bytes32 beaconBlockRoot = timestamp.getParentBlockRootAt();
+        if (beaconBlockRoot == bytes32(0)) {
+            revert InvalidBeaconBlockRoot();
+        }
+        return beaconBlockRoot;
     }
 
     /// @notice Verifies the validator pubkey is in the registry of beacon state at the given validator index,

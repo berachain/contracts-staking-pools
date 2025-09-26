@@ -5,6 +5,7 @@ import { ERC1967Utils } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Utils
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UpgradeableBeacon } from "@solady/src/utils/UpgradeableBeacon.sol";
 
+import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
 import { console2 } from "forge-std/console2.sol";
 
 import { Base } from "./base/Base.t.sol";
@@ -106,8 +107,6 @@ contract StakingPoolsContractsFactoryTest is Base {
     function test_activateStakingPool() public {
         _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        bytes memory withdrawalCredentials =
-            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
         uint64 initialDepositAmountInGWei = 20_000 gwei;
 
         StakingPoolContractsFactory.ValidatorData memory validatorData =
@@ -123,10 +122,23 @@ contract StakingPoolsContractsFactoryTest is Base {
         assertEq(stakingPoolContract.totalDeposits(), uint256(initialDepositAmountInGWei) * 1e9);
     }
 
+    function test_proofVerification_InvalidBeaconBlockRoot() public {
+        _deployStakingPoolContracts(fixtureValidatorData.pubkey);
+
+        uint64 initialDepositAmountInGWei = 20_000 gwei;
+
+        StakingPoolContractsFactory.ValidatorData memory validatorData =
+            _helper_getValidatorData(initialDepositAmountInGWei);
+        StakingPoolContractsFactory.ProofData memory proofData = _helper_getProofData();
+
+        mockEIP4788.setMockBeaconBlockRoot(bytes32(0));
+
+        vm.expectRevert(BeaconRootsHelper.InvalidBeaconBlockRoot.selector);
+        stakingPoolContractsFactory.activateStakingPool(validatorData, proofData, uint64(block.timestamp));
+    }
+
     function test_activateStakingPool_InvalidTimestamp() public {
         _deployStakingPoolContracts(fixtureValidatorData.pubkey);
-        bytes memory withdrawalCredentials =
-            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
         uint64 initialDepositAmountInGWei = 20_000 gwei;
 
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
@@ -149,8 +161,6 @@ contract StakingPoolsContractsFactoryTest is Base {
     function test_activateStakingPool_InvalidInitialDepositAmount() public {
         _deployStakingPoolContracts(fixtureValidatorData.pubkey);
 
-        bytes memory withdrawalCredentials =
-            _helper_withdrawalAddressToCredentials(fixtureValidatorData.withdrawalAddress);
         uint64 initialDepositAmountInGWei = 100 gwei;
 
         StakingPoolContractsFactory.ValidatorData memory validatorData =
@@ -251,6 +261,7 @@ contract StakingPoolsContractsFactoryTest is Base {
 
     function _helper_getValidatorData(uint64 initialDepositAmountInGWei)
         internal
+        view
         returns (StakingPoolContractsFactory.ValidatorData memory)
     {
         bytes memory withdrawalCredentials =
@@ -263,7 +274,7 @@ contract StakingPoolsContractsFactoryTest is Base {
         });
     }
 
-    function _helper_getProofData() internal returns (StakingPoolContractsFactory.ProofData memory) {
+    function _helper_getProofData() internal view returns (StakingPoolContractsFactory.ProofData memory) {
         return IStakingPoolContractsFactory.ProofData({
             pubkeyProof: fixtureValidatorData.pubkeyProof,
             withdrawalCredentialsProof: fixtureValidatorData.withdrawalCredentialsProof,
