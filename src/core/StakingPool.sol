@@ -148,25 +148,41 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool, bool) {
         _validateSender(_withdrawalVault);
 
+        // Calculate and burn shares
         uint256 amountOfSharesToBurn = previewWithdraw(assets);
         _burnShares(user, amountOfSharesToBurn);
 
-        // Short-circuit withdrawal request if buffered assets are sufficient to cover the request and active threshold
-        // is not reached.
-        if (!activeThresholdReached && (bufferedAssets >= assets)) {
+        // If the pool has not reached the activation threshold and the default shares recipient has insufficient
+        // balance,
+        // prevent withdrawal.
+        bool isDefaultRecipient = user == _defaultSharesRecipient;
+        bool hasInsufficientDefaultBalance = isDefaultRecipient && balanceOf(user) < totalDeposits;
+        if (!activeThresholdReached && hasInsufficientDefaultBalance) {
+            revert WithdrawalNotAllowed();
+        }
+
+        // If the pool has not reached the activation threshold and the buffered assets are sufficient,
+        // enable short circuit withdrawal and transfer the assets to the withdrawal vault.
+        if (!activeThresholdReached && bufferedAssets >= assets) {
             SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
             bufferedAssets -= assets;
             return (amountOfSharesToBurn, isFullyExited, true);
         }
 
-        // If short-circuit is not triggered, check if withdrawal is allowed
+        // If the pool has reached the activation threshold and the withdrawal cooldown period has not elapsed,
+        // prevent withdrawal.
         if (block.number < _validatorActivationBlock + ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS) {
             revert WithdrawalNotAllowed();
         }
 
-        // If pool is not fully exited, update total deposits and trigger full exit if necessary
         if (!isFullyExited) {
-            totalDeposits -= assets;
+            if (assets > totalDeposits) {
+                bufferedAssets -= (assets - totalDeposits);
+                totalDeposits = 0;
+            } else {
+                totalDeposits -= assets;
+            }
+
             if (totalDeposits < minEffectiveBalance()) {
                 _triggerFullExit();
             }
@@ -368,9 +384,11 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         // Freeze total assets at current value after the drop boost is queued and base rate fees are updated.
         _frozenTotalAssets = _getTotalAssets();
 
-        // Transfer buffered assets to the withdrawal vault
-        if (bufferedAssets > 0) {
-            SafeTransferLib.safeTransferETH(_withdrawalVault, bufferedAssets);
+        // Transfer all remaining native balance to the withdrawal vault.
+        // Note: We use address(this).balance rather than bufferedAssets since bufferedAssets
+        // was already decremented earlier in the withdrawal flow. This ensures we don't miss any native token.
+        if (address(this).balance > 0) {
+            SafeTransferLib.safeTransferETH(_withdrawalVault, address(this).balance);
             bufferedAssets = 0;
         }
 

@@ -250,6 +250,113 @@ contract StakingPoolTest is Base {
         assertFalse(isFullyExited);
     }
 
+    function test_notifyWithdrawalRequest_Fail_InvalidSender() public {
+        test_activate();
+        vm.expectRevert(
+            abi.encodeWithSelector(IStakingPool.InvalidSender.selector, address(this), address(withdrawalVault))
+        );
+        stakingPool.notifyWithdrawalRequest(alice, 1 ether);
+    }
+
+    function test_notifyWithdrawalRequest_Fail_WithdrawalNotAllowed() public {
+        test_activate();
+        uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
+        _helper_submit(alice, aliceDepositAmount);
+
+        vm.prank(address(withdrawalVault));
+        vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
+        stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount);
+    }
+
+    function test_notifyWithdrawalRequest_FullExit() public {
+        test_activate();
+
+        // deposit enought to reach the activation threshold
+        uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
+        _helper_submit(alice, aliceDepositAmount);
+
+        vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+
+        // Withdraw enough to trigger full exit
+        vm.prank(address(withdrawalVault));
+        (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
+            stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount);
+
+        assertFalse(isShortCircuit);
+        assertEq(amountOfSharesToBurn, aliceDepositAmount);
+        assertTrue(isFullyExited);
+        assertTrue(stakingPool.isFullyExited());
+        assertTrue(stakingPool.paused());
+    }
+
+    function test_notifyWithdrawalRequest_DefaultSharesRecipient_Fail() public {
+        test_activate();
+        uint256 withdrawAmount = INITIAL_DEPOSIT_AMOUNT / 2;
+
+        vm.prank(address(withdrawalVault));
+        vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
+        stakingPool.notifyWithdrawalRequest(address(this), withdrawAmount);
+    }
+
+    function test_notifyWithdrawalRequest_DefaultSharesRecipient() public {
+        // Default shares recipient can withdraw funds staked after first deposit before activation threshold is
+        // reached.
+        test_activate();
+
+        // Submit additional funds from default shares recipient
+        uint256 submitAmount = 100 ether;
+        _helper_submit(address(this), submitAmount);
+
+        vm.prank(address(withdrawalVault));
+        (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
+            stakingPool.notifyWithdrawalRequest(address(this), submitAmount);
+
+        assertTrue(isShortCircuit);
+        assertEq(amountOfSharesToBurn, submitAmount);
+        assertFalse(isFullyExited);
+    }
+
+    function test_notifyWithdrawalRequest_DefaultSharesRecipient_Fail_WithdrawInitalDeposit() public {
+        test_activate();
+
+        // Submit additional funds from default shares recipient
+        uint256 submitAmount = 100 ether;
+        _helper_submit(address(this), submitAmount);
+
+        vm.prank(address(withdrawalVault));
+        vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
+        stakingPool.notifyWithdrawalRequest(address(this), submitAmount + 1);
+    }
+
+    function test_notifyWithdrawalRequest_DefaultSharesRecipient_AfterActivationThreshold() public {
+        test_activate();
+
+        // Submit additional funds from default shares recipient
+        uint256 defaultSharesRecipientSubmitAmount = 100 ether;
+        _helper_submit(address(this), defaultSharesRecipientSubmitAmount);
+
+        uint256 aliceSubmitAmount =
+            stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - defaultSharesRecipientSubmitAmount;
+        _helper_submit(alice, aliceSubmitAmount);
+
+        vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+
+        // Submit more funds from bob to avoid full exit
+        _helper_submit(bob, 1_000_000 ether);
+
+        vm.prank(address(withdrawalVault));
+        (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) = stakingPool.notifyWithdrawalRequest(
+            address(this), defaultSharesRecipientSubmitAmount + INITIAL_DEPOSIT_AMOUNT
+        );
+
+        assertTrue(stakingPool.activeThresholdReached());
+        assertFalse(isShortCircuit);
+        assertEq(amountOfSharesToBurn, defaultSharesRecipientSubmitAmount + INITIAL_DEPOSIT_AMOUNT);
+        assertFalse(isFullyExited);
+        assertEq(stakingPool.totalDeposits(), 1_000_000 ether + aliceSubmitAmount);
+        assertEq(stakingPool.bufferedAssets(), 0);
+    }
+
     function test_notifyWithdrawalRequest_DepositGreaterThenMinEffectiveBalance() public {
         test_activate();
         uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
@@ -471,5 +578,44 @@ contract StakingPoolTest is Base {
         vm.prank(address(smartOperator));
         vm.expectRevert(IStakingPool.InvalidMinEffectiveBalance.selector);
         stakingPool.setMinEffectiveBalance(tooHighBalance);
+    }
+
+    function testRevert_InflationAttack() public {
+        test_activate();
+
+        uint256 donationAmount = 200_000 ether;
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), donationAmount);
+
+        // Minimal deposit amount
+        uint256 mintedShares = stakingPool.previewDeposit(1);
+        assertEq(mintedShares, 0);
+        _helper_submit(address(this), 1);
+
+        vm.prank(address(withdrawalVault));
+        vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
+        stakingPool.notifyWithdrawalRequest(address(this), donationAmount);
+    }
+
+    function test_Wrong_FrozenTotalAssets() public {
+        test_activate();
+
+        _helper_submit(alice, 240_000 ether);
+        _helper_submit(alice, 9_740_001 ether);
+
+        assertEq(stakingPool.totalDeposits(), 250_000 ether);
+        assertEq(stakingPool.bufferedAssets(), 9_740_001 ether);
+        assertEq(stakingPool.totalAssets(), 250_000 ether + 9_740_001 ether);
+        uint256 previousTotalAssets = stakingPool.totalAssets();
+
+        vm.roll(vm.getBlockNumber() + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+
+        vm.startPrank(alice);
+        vm.deal(alice, 1);
+        withdrawalVault.requestWithdrawal{ value: 1 }(fixtureValidatorData.pubkey, 9_500_000 gwei, 1);
+        vm.stopPrank();
+
+        assertEq(stakingPool.totalDeposits(), 0);
+        assertEq(stakingPool.bufferedAssets(), 0);
+        assertEq(stakingPool.totalAssets(), previousTotalAssets - 9_500_000 ether);
     }
 }

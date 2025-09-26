@@ -35,8 +35,8 @@ contract WithdrawalVault is
 
     // CONSTANTS
 
-    /// @notice 192 blocks per epoch * 256 epochs
-    uint256 public constant WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY = 49_152;
+    /// @notice 43_200 blocks per day (2 seconds per block) * 3 days
+    uint256 public constant WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY = 129_600;
 
     // STORAGE
 
