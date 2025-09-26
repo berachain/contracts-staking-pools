@@ -53,7 +53,6 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
     event StakingPoolBeaconImplUpgraded(address newImplementation);
     event StakingRewardsVaultBeaconImplUpgraded(address newImplementation);
     event IncentiveCollectorBeaconImplUpgraded(address newImplementation);
-    event WithdrawalVaultBeaconImplUpgraded(address newImplementation);
 
     function deployStakingPoolContracts(
         bytes memory pubkey,
@@ -103,6 +102,11 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
     /// @custom:throws InvalidAddress if newImplementation is the zero address
     function upgradeIncentiveCollectorBeaconImpl(address newImplementation) external;
 
+    /// @notice Validates the pubkey proof
+    /// @param pubkey The pubkey of the validator
+    /// @param pubkeyProof The proof of the pubkey
+    /// @param validatorIndex The index of the validator
+    /// @param timestamp The timestamp of the beacon block
     function validatePubkeyProof(
         bytes calldata pubkey,
         bytes32[] calldata pubkeyProof,
@@ -112,6 +116,12 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
         external
         view;
 
+    /// @notice Validates the balance proof
+    /// @param balance The balance of the validator
+    /// @param balancesLeaf The leaf of the balances
+    /// @param balanceProof The proof of the balance
+    /// @param validatorIndex The index of the validator
+    /// @param timestamp The timestamp of the beacon block
     function validateBalanceProof(
         uint64 balance,
         bytes32 balancesLeaf,
@@ -122,7 +132,8 @@ interface IStakingPoolContractsFactory is ICoreContractsStorage {
         external
         view;
 
-    function getCoreContracts(bytes memory pubkey) external view returns (CoreContracts memory);
-
+    /// @notice Predicts the addresses of the staking pool contracts for a given pubkey
+    /// @param pubkey The pubkey of the validator
+    /// @return The addresses of the staking pool contracts
     function predictStakingPoolContractsAddresses(bytes memory pubkey) external view returns (CoreContracts memory);
 }

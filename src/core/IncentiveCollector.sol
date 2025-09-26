@@ -122,7 +122,7 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
     }
 
     /// @dev Forwards all received native tokens to the staking rewards vault.
-    /// @custom:throws TransferFailed if transfer to staking rewards vault fails.
+    /// @custom:throws ETHTransferFailed if transfer to staking rewards vault fails.
     function _donate() internal {
         SafeTransferLib.safeTransferETH(_stakingRewardsVault, msg.value);
 

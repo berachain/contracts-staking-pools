@@ -4,10 +4,6 @@ pragma solidity ^0.8.30;
 interface IWithdrawalVault {
     // EVENTS
 
-    /// @notice Event emitted when withdrawals are triggered.
-    /// @param amount The amount of assets withdrawn.
-    event WithdrawalsWithdrawn(uint256 amount);
-
     /// @notice Event emitted when ERC20 tokens are recovered.
     /// @param token The address of the token recovered.
     /// @param to The address to which the tokens were sent.
@@ -32,8 +28,6 @@ interface IWithdrawalVault {
 
     // Signature: 0xddb5de5e
     error InvalidSender();
-    // Signature: 0x27fcd9d1
-    error WithdrawalFailed();
     // Signature: 0x520849df
     error OverpaidFee();
     // Signature: 0x025dbdd4
@@ -87,6 +81,7 @@ interface IWithdrawalVault {
     /// @notice Requests a redemption of shares from the staking pool.
     /// @dev Creates an NFT representing the redemption that will be necessary to finalize the request.
     /// @dev The number of shares will be rounded down so that the corresponding asset value is a multiple of GWei.
+    /// @dev Due to the rounding down to the nearest GWei, some dust amount of shares may become non-withdrawable.
     /// @param pubkey The validator's public key.
     /// @param shares The amount of shares to redeem.
     /// @param maxFeeToPay The maximum fee the user is willing to pay for the redemption (EIP-7002).

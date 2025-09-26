@@ -11,7 +11,7 @@ import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { BeaconRootsHelper } from "src/helpers/BeaconRootsHelper.sol";
-import { IStakingPoolContractsFactory } from "src/interfaces/IStakingPoolContractsFactory.sol";
+import { IStakingPoolContractsFactory, ICoreContractsStorage } from "src/interfaces/IStakingPoolContractsFactory.sol";
 
 contract StakingPoolContractsFactory is
     IStakingPoolContractsFactory,
@@ -66,6 +66,7 @@ contract StakingPoolContractsFactory is
         _beaconIncentiveCollector = address(new UpgradeableBeacon(address(this), incentiveCollectorInitialImpl));
     }
 
+    /// @inheritdoc IStakingPoolContractsFactory
     function deployStakingPoolContracts(
         bytes memory pubkey,
         bytes memory withdrawalCredentials,
@@ -99,10 +100,12 @@ contract StakingPoolContractsFactory is
         );
     }
 
+    /// @inheritdoc ICoreContractsStorage
     function getCoreContracts(bytes memory pubkey) external view returns (CoreContracts memory) {
         return _coreContracts[pubkey];
     }
 
+    /// @inheritdoc IStakingPoolContractsFactory
     function predictStakingPoolContractsAddresses(bytes memory pubkey) external view returns (CoreContracts memory) {
         CoreContracts memory coreContracts;
 
@@ -120,6 +123,7 @@ contract StakingPoolContractsFactory is
         return coreContracts;
     }
 
+    /// @inheritdoc IStakingPoolContractsFactory
     function activateStakingPool(
         ValidatorData calldata validatorData,
         ProofData calldata proofData,
@@ -162,6 +166,7 @@ contract StakingPoolContractsFactory is
         emit StakingPoolActivated(_coreContracts[validatorData.pubkey].stakingPool);
     }
 
+    /// @inheritdoc IStakingPoolContractsFactory
     function validatePubkeyProof(
         bytes calldata pubkey,
         bytes32[] calldata pubkeyProof,
@@ -176,6 +181,7 @@ contract StakingPoolContractsFactory is
         _verifyValidatorPubkeyInBeaconBlock(beaconBlockRoot, pubkeyProof, pubkey, validatorIndex);
     }
 
+    /// @inheritdoc IStakingPoolContractsFactory
     function validateBalanceProof(
         uint64 balance,
         bytes32 balancesLeaf,

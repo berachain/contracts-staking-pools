@@ -47,8 +47,6 @@ interface IIncentiveCollector {
     error InvalidSender(address sender, address expected);
     // Signature: 0x03e3ccdd
     error IncorrectPayoutAmount();
-    // Signature: 0x90b8ec18
-    error TransferFailed();
     // Signature: 0xf3f874a0
     error NodeIsFullyExited();
     // Signature: 0x546c7600
@@ -63,11 +61,11 @@ interface IIncentiveCollector {
     /// minimum expected.
     /// @param tokens Array of ERC20 token addresses to claim balances from.
     /// @custom:throws IncorrectPayoutAmount if msg.value does not match required payout amount.
-    /// @custom:throws TransferFailed if transfer to staking rewards vault fails.
+    /// @custom:throws ETHTransferFailed if transfer to staking rewards vault fails.
     function claim(address[] calldata tokens) external payable;
 
     /// @notice Queues a payout amount change.
-    /// @dev Admin function.
+    /// @dev Callable only by the smart operator.
     /// @param newPayoutAmount The new payout amount in native tokens.
     /// @custom:throws PayoutAmountIsZero if the new payout amount is zero.
     function queuePayoutAmountChange(uint256 newPayoutAmount) external;

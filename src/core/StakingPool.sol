@@ -11,8 +11,6 @@ import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
-import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
-import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 
 contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
@@ -378,7 +376,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     /// 4. Transfers any staking rewards to the withdrawal vault.
     /// 5. Sets the full exit flag and pauses the staking pool.
     /// @custom:emits FullExitTriggered when full exit is triggered
-    /// @custom:throws TransferFailed if transfer to withdrawal vault fails
+    /// @custom:throws ETHTransferFailed if transfer to withdrawal vault fails
     function _triggerFullExit() internal {
         ISmartOperator(_smartOperator).fullExitQueueDropBoost();
         // Freeze total assets at current value after the drop boost is queued and base rate fees are updated.

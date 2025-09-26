@@ -22,8 +22,6 @@ interface IStakingPool {
     error InvalidSender(address sender, address expected);
     // Signature: 0x2c5211c6
     error InvalidAmount();
-    // Signature: 0x90b8ec18
-    error TransferFailed();
     // Signature: 0x4134ed3a
     error WithdrawalNotAllowed();
     // Signature: 0x0ec2e9b9
@@ -68,9 +66,9 @@ interface IStakingPool {
     /// @return sharesToBurn The amount of shares that were burned.
     /// @return isFullyExited Whether the pool has fully exited.
     /// @return isShortCircuit Whether the withdrawal request is short-circuited.
-    /// @custom:throws InvalidSender if not called by withdrawalRequestERC721.
+    /// @custom:throws InvalidSender if not called by withdrawalVault.
     /// @custom:throws WithdrawalNotAllowed if withdrawal cooldown period has not elapsed.
-    /// @custom:throws TransferFailed if transfer to withdrawal vault fails.
+    /// @custom:throws ETHTransferFailed if transfer to withdrawal vault fails.
     function notifyWithdrawalRequest(
         address user,
         uint256 assets

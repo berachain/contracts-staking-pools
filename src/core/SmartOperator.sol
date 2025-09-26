@@ -115,6 +115,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         BGT.activateBoost(address(this), _pubkey);
     }
 
+    /// @inheritdoc ISmartOperator
     function queueDropBoost(uint128 amount) external onlyRole(BGT_MANAGER_ROLE) {
         BGT.queueDropBoost(_pubkey, uint128(amount));
     }
@@ -137,6 +138,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         BGT.dropBoost(address(this), _pubkey);
     }
 
+    /// @inheritdoc ISmartOperator
     function redeemBGT(uint256 amount) external whenNotFullyExited onlyRole(BGT_MANAGER_ROLE) {
         _updateEarnedBGTFees();
 

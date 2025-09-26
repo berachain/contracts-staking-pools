@@ -11,17 +11,12 @@ interface ISmartOperator {
     error InvalidSender(address sender, address expected);
     // Signature: 0x5bfcf715
     error InvalidProtocolFeePercentage();
-    // Signature: 0x2c5211c6
-    error InvalidAmount();
-    // Signature: 0x90b8ec18
-    error TransferFailed();
     // Signature: 0x32e1a5be
     error StakingPoolIsFullyExited();
 
     // EVENTS
 
     event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
-    event ProtocolFeeCollected(address receiver, uint256 amount);
     event BGTRedeemed(address receiver, uint256 amount);
 
     // FUNCTIONS
@@ -47,9 +42,15 @@ interface ISmartOperator {
     /// @notice Executes the drop boost for this operator.
     function dropBoost() external;
 
+    /// @notice Redeems a given amount of BGT for BERA.
+    /// @dev The protocol fee is deducted from the amount.
+    /// @dev Can only be called by the BGT_MANAGER_ROLE.
+    /// @param amount The amount of BGT to redeem.
+    function redeemBGT(uint256 amount) external;
+
     /// @notice Redeems all BGT tokens owned by this contract for BERA.
     /// @dev The protocol fee is deducted from the amount.
-    /// @dev Can only be called by associated WithdrawalRequestERC721 contract when in need of BERA.
+    /// @dev Can only be called by associated WithdrawalVault contract when in need of BERA.
     /// @param receiver The address to send the BERA to.
     function fullExitRedeemBGT(address receiver) external;
 
@@ -92,6 +93,8 @@ interface ISmartOperator {
     function claimBgtStakerReward() external returns (uint256);
 
     /// @notice Claims BGTStaker and incentive program rewards and send them to the incentive collector.
+    /// @param claims The claims for the incentive program rewards.
+    /// @param tokens The tokens to be sent to the incentive collector.
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external;
 
     // VIEWS
