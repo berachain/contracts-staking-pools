@@ -30,12 +30,13 @@ contract Deployer is Create2Deployer {
         address incentiveCollectorInitialImpl
     ) {
         // Deploy accounting oracle implementation
-        address accountingOracleImpl = deployWithCreate2(0, type(AccountingOracle).creationCode);
+        address accountingOracleImpl = deployWithCreate2(accountingOracleSalt, type(AccountingOracle).creationCode);
         // deploy accounting oracle proxy
         accountingOracle = AccountingOracle(deployProxyWithCreate2(accountingOracleImpl, accountingOracleSalt));
 
         // Deploy staking pool contracts factory implementation
-        address stakingPoolContractsFactoryImpl = deployWithCreate2(0, type(StakingPoolContractsFactory).creationCode);
+        address stakingPoolContractsFactoryImpl =
+            deployWithCreate2(stakingPoolContractsFactorySalt, type(StakingPoolContractsFactory).creationCode);
 
         // deploy staking pool contracts factory proxy
         stakingPoolContractsFactory = StakingPoolContractsFactory(
@@ -43,7 +44,7 @@ contract Deployer is Create2Deployer {
         );
 
         // Deploy withdrawal vault implementation
-        address withdrawalVaultImpl = deployWithCreate2(0, type(WithdrawalVault).creationCode);
+        address withdrawalVaultImpl = deployWithCreate2(withdrawalVaultSalt, type(WithdrawalVault).creationCode);
 
         // deploy withdrawal vault proxy
         withdrawalVault = WithdrawalVault(payable(deployProxyWithCreate2(withdrawalVaultImpl, withdrawalVaultSalt)));
