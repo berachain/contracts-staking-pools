@@ -22,6 +22,8 @@ contract AccountingOracleTest is Base {
         // Unpause staking pool to allow updates
         stakingPool.unpause();
 
+        accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
+
         mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.warp(vm.getBlockTimestamp() + 15 minutes);
         accountingOracle.updateTotalDeposits(
@@ -41,6 +43,8 @@ contract AccountingOracleTest is Base {
     function test_updateTotalDeposits_invalidTimestamp() public {
         // Unpause staking pool to allow updates
         stakingPool.unpause();
+
+        accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
 
         // Timestamp is older then limit
         mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
@@ -71,6 +75,8 @@ contract AccountingOracleTest is Base {
     }
 
     function test_updateTotalDeposits_Fail_Paused() public {
+        accountingOracle.grantRole(accountingOracle.FEEDER_ROLE(), address(this));
+
         mockEIP4788.setMockBeaconBlockRoot(fixtureValidatorData.beaconBlockRoot);
         vm.expectRevert(abi.encodeWithSelector(Pausable.EnforcedPause.selector));
         accountingOracle.updateTotalDeposits(
