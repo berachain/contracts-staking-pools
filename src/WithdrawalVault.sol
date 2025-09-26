@@ -184,7 +184,7 @@ contract WithdrawalVault is
             finalized: false
         });
 
-        _safeMint(msg.sender, newRequestId);
+        _mint(msg.sender, newRequestId);
         withdrawalRequests[newRequestId] = newRequest;
 
         return newRequestId;
