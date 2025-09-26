@@ -228,6 +228,19 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
         _mintShares(_defaultSharesRecipient, shares);
     }
 
+    /// @inheritdoc IStakingPool
+    function processRewards() external whenNotPaused {
+        (uint256 updatedBufferedAssets,,, uint256 rewardsToCollect) = _computeDepositAmounts(0);
+
+        if (rewardsToCollect > 0) {
+            _collectRewards(rewardsToCollect);
+        }
+
+        bufferedAssets = updatedBufferedAssets;
+
+        _processDeposit();
+    }
+
     // INTERNAL FUNCTIONS
 
     function _submit(address receiver) internal whenNotPaused returns (uint256 shares) {
@@ -249,20 +262,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
         bufferedAssets = updatedBufferedAssets;
 
-        if (_canDeposit()) {
-            // Deposit contract accepts only multiples of 1 gwei as deposit amount.
-            // Round down to nearest gwei and deposit
-            uint256 depositAmount = (bufferedAssets / 1 gwei) * 1 gwei;
-            _depositToConsensusLayer(depositAmount);
-
-            // Leave the remaining amount in the buffer.
-            bufferedAssets -= depositAmount;
-
-            if (totalDeposits == MAX_EFFECTIVE_BALANCE) {
-                _pause();
-                emit MaxCapacityReached(_pubkey);
-            }
-        }
+        _processDeposit();
 
         if (refundAmount > 0) {
             SafeTransferLib.safeTransferETH(msg.sender, refundAmount);
@@ -367,6 +367,27 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
     /// @dev Collects the given amount of staking rewards from the associated vault.
     function _collectRewards(uint256 rewardsToCollect) internal {
         IStakingRewardsVault(_stakingRewardsVault).withdrawRewards(rewardsToCollect);
+    }
+
+    /// @dev Processes a deposit to the consensus layer if conditions allow
+    /// @dev Will deposit the maximum possible amount from buffered assets, rounded down to nearest gwei
+    /// @dev Any remaining amount stays in the buffer
+    /// @dev If max effective balance is reached after deposit, pauses the pool and emits MaxCapacityReached
+    function _processDeposit() internal {
+        if (_canDeposit()) {
+            // Deposit contract accepts only multiples of 1 gwei as deposit amount.
+            // Round down to nearest gwei and deposit
+            uint256 depositAmount = (bufferedAssets / 1 gwei) * 1 gwei;
+            _depositToConsensusLayer(depositAmount);
+
+            // Leave the remaining amount in the buffer.
+            bufferedAssets -= depositAmount;
+
+            if (totalDeposits == MAX_EFFECTIVE_BALANCE) {
+                _pause();
+                emit MaxCapacityReached(_pubkey);
+            }
+        }
     }
 
     /// @dev Triggers a full exit of the staking pool when stake falls below minimum effective balance.

@@ -196,6 +196,72 @@ contract StakingPoolTest is Base {
         stakingPool.submit{ value: 0 }(alice);
     }
 
+    function testFuzz_processRewards(uint256 rewardsAmount) public {
+        test_activate();
+        // bound to avoid deposit
+        rewardsAmount = bound(rewardsAmount, 1, (stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1));
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
+
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingRewardsReceived(rewardsAmount);
+        stakingPool.processRewards();
+
+        assertEq(stakingPool.bufferedAssets(), rewardsAmount); // funds are not deposited to CL
+        assertEq(address(stakingPool).balance, rewardsAmount);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+    }
+
+    function testFuzz_processRewards_AfterActivation(uint256 rewardsAmount) public {
+        test_activate();
+        _helper_submit(alice, stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT + 10_000 ether);
+        assertEq(stakingPool.bufferedAssets(), 0);
+        assertEq(stakingPool.totalDeposits(), stakingPool.minEffectiveBalance() + 10_000 ether);
+
+        // avoid edge case where remaining capacity is lower than10_000 ether
+        rewardsAmount = bound(
+            rewardsAmount,
+            10_000 ether,
+            stakingPool.MAX_EFFECTIVE_BALANCE() - stakingPool.totalDeposits() - 10_000 ether
+        );
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
+
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingRewardsReceived(rewardsAmount);
+        stakingPool.processRewards();
+
+        uint256 rewardsAmountRounded = (rewardsAmount / 1 gwei) * 1 gwei;
+
+        assertEq(stakingPool.bufferedAssets(), rewardsAmount - rewardsAmountRounded);
+        assertEq(stakingPool.totalDeposits(), stakingPool.minEffectiveBalance() + 10_000 ether + rewardsAmountRounded);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+    }
+
+    function test_processRewards_ExceedsMaxEffectiveBalance() public {
+        test_activate();
+        // leave some space for the rewards
+        _helper_submit(alice, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 10_000 ether);
+        // fill the buffer
+        _helper_submit(bob, 5000 ether);
+        assertEq(stakingPool.bufferedAssets(), 5000 ether);
+
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 10_000 ether);
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingRewardsReceived(5000 ether);
+        emit IStakingPool.MaxCapacityReached(fixtureValidatorData.pubkey);
+        stakingPool.processRewards();
+
+        assertEq(stakingPool.bufferedAssets(), 0);
+        assertEq(stakingPool.totalDeposits(), stakingPool.MAX_EFFECTIVE_BALANCE());
+        assertTrue(stakingPool.paused());
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 5000 ether);
+    }
+
+    function test_processRewards_Fail_Paused() public {
+        assertEq(stakingPool.paused(), true);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        stakingPool.processRewards();
+    }
+
     function test_getSharesByAsset(uint256 amount) public {
         test_activate();
         amount = bound(amount, 1, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT);

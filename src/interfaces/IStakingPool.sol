@@ -92,6 +92,10 @@ interface IStakingPool {
     /// @return shares The amount of stBERA shares minted to the depositor.
     function submit(address receiver) external payable returns (uint256 shares);
 
+    /// @notice Processes rewards from the staking rewards vault.
+    /// @dev Compound rewards from the staking rewards vault to the staking pool.
+    function processRewards() external;
+
     /// @notice Mints shares to the default shares recipient.
     /// @dev Can only be called by the smart operator.
     /// @dev This function is used to mint shares to the validator instead of accruing fees.
