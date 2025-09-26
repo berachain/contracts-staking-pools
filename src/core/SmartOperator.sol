@@ -84,6 +84,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         _grantRole(DEFAULT_ADMIN_ROLE, governance);
         _grantRole(VALIDATOR_ADMIN_ROLE, validatorAdmin);
 
+        _setRoleAdmin(BGT_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(REWARDS_ALLOCATION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(COMMISSION_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
         _setRoleAdmin(INCENTIVE_COLLECTOR_MANAGER_ROLE, VALIDATOR_ADMIN_ROLE);
@@ -245,7 +246,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
-    function setMinEffectiveBalance(uint256 minEffectiveBalance) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setMinEffectiveBalance(uint256 minEffectiveBalance) external onlyRole(VALIDATOR_ADMIN_ROLE) {
         IStakingPool(_stakingPool).setMinEffectiveBalance(minEffectiveBalance);
     }
 

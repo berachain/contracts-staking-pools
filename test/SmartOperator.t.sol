@@ -158,6 +158,36 @@ contract SmartOperatorTest is Base {
         smartOperator.grantRole(validatorFeeManagerRole, validatorFeeManager);
     }
 
+    function test_grantRole_BGTManagerRole() public {
+        address validatorAdmin = makeAddr("validatorAdmin");
+        address bgtManager = makeAddr("bgtManager");
+
+        test_grantRole_ValidatorAdminRole(validatorAdmin);
+
+        bytes32 bgtManagerRole = smartOperator.BGT_MANAGER_ROLE();
+
+        vm.prank(validatorAdmin);
+        smartOperator.grantRole(bgtManagerRole, bgtManager);
+
+        assertTrue(smartOperator.hasRole(bgtManagerRole, bgtManager));
+    }
+
+    function test_grantRole_BGTManagerRole_Fail_NotValidatorAdmin() public {
+        address validatorAdminWithoutRole = makeAddr("validatorAdminWithoutRole");
+        address bgtManager = makeAddr("bgtManager");
+
+        bytes32 bgtManagerRole = smartOperator.BGT_MANAGER_ROLE();
+        bytes32 validatorAdminRole = smartOperator.VALIDATOR_ADMIN_ROLE();
+
+        vm.prank(validatorAdminWithoutRole);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector, validatorAdminWithoutRole, validatorAdminRole
+            )
+        );
+        smartOperator.grantRole(bgtManagerRole, bgtManager);
+    }
+
     function test_queueIncentiveCollectorPayoutAmount() public {
         address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
         test_grantRole_IncentiveCollectorManagerRole();
@@ -297,7 +327,9 @@ contract SmartOperatorTest is Base {
         address notAdmin = makeAddr("notAdmin");
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, notAdmin, smartOperator.DEFAULT_ADMIN_ROLE()
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                notAdmin,
+                smartOperator.VALIDATOR_ADMIN_ROLE()
             )
         );
         vm.prank(notAdmin);
