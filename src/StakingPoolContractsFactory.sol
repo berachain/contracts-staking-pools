@@ -173,7 +173,7 @@ contract StakingPoolContractsFactory is
         uint64 validatorIndex,
         uint64 timestamp
     )
-        public
+        external
         view
     {
         _validateProofsTimestamp(timestamp);
@@ -189,7 +189,7 @@ contract StakingPoolContractsFactory is
         uint64 validatorIndex,
         uint64 timestamp
     )
-        public
+        external
         view
     {
         _validateProofsTimestamp(timestamp);
@@ -205,14 +205,14 @@ contract StakingPoolContractsFactory is
 
     /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
     /// beacon state is modified).
-    function setZeroValidatorPubkeyGIndex(uint64 _zeroValidatorPubkeyGIndex) public onlyOwner {
+    function setZeroValidatorPubkeyGIndex(uint64 _zeroValidatorPubkeyGIndex) external onlyOwner {
         _setZeroValidatorPubkeyGIndex(_zeroValidatorPubkeyGIndex);
     }
 
     /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
     /// beacon state is modified).
     function setZeroValidatorWithdrawalCredentialsGIndex(uint64 _zeroValidatorWithdrawalCredentialsGIndex)
-        public
+        external
         onlyOwner
     {
         _setZeroValidatorWithdrawalCredentialsGIndex(_zeroValidatorWithdrawalCredentialsGIndex);
@@ -220,7 +220,7 @@ contract StakingPoolContractsFactory is
 
     /// @dev This is necessary to call when the beacon chain hard forks (and specifically the underlying structure of
     /// beacon state is modified).
-    function setZeroValidatorBalanceGIndex(uint64 _zeroValidatorBalanceGIndex) public onlyOwner {
+    function setZeroValidatorBalanceGIndex(uint64 _zeroValidatorBalanceGIndex) external onlyOwner {
         _setZeroValidatorBalanceGIndex(_zeroValidatorBalanceGIndex);
     }
 
