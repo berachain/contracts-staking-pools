@@ -25,6 +25,36 @@ contract StakingPoolsContractsFactoryTest is Base {
         super.setUp();
     }
 
+    function test_transferOwnership() public {
+        address newOwner = makeAddr("newOwner");
+
+        stakingPoolContractsFactory.transferOwnership(newOwner);
+        assertEq(stakingPoolContractsFactory.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        stakingPoolContractsFactory.acceptOwnership();
+        assertEq(stakingPoolContractsFactory.owner(), newOwner);
+        assertEq(stakingPoolContractsFactory.pendingOwner(), address(0));
+    }
+
+    function test_transferOwnership_NotOwner() public {
+        address notOwner = makeAddr("notOwner");
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPoolContractsFactory.transferOwnership(notOwner);
+    }
+
+    function test_transferOwnership_NotPendingOwner() public {
+        address newOwner = makeAddr("newOwner");
+        address notPendingOwner = makeAddr("notPendingOwner");
+        stakingPoolContractsFactory.transferOwnership(newOwner);
+        vm.prank(notPendingOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notPendingOwner)
+        );
+        stakingPoolContractsFactory.acceptOwnership();
+    }
+
     function test_setGeneralizedIndexes() public {
         stakingPoolContractsFactory.setZeroValidatorPubkeyGIndex(100);
         assertEq(stakingPoolContractsFactory.zeroValidatorPubkeyGIndex(), 100);

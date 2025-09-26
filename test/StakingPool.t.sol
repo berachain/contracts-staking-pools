@@ -28,6 +28,36 @@ contract StakingPoolTest is Base {
         smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
     }
 
+    function test_transferOwnership() public {
+        address newOwner = makeAddr("newOwner");
+
+        stakingPool.transferOwnership(newOwner);
+        assertEq(stakingPool.pendingOwner(), newOwner);
+
+        vm.prank(newOwner);
+        stakingPool.acceptOwnership();
+        assertEq(stakingPool.owner(), newOwner);
+        assertEq(stakingPool.pendingOwner(), address(0));
+    }
+
+    function test_transferOwnership_NotOwner() public {
+        address notOwner = makeAddr("notOwner");
+        vm.prank(notOwner);
+        vm.expectRevert(abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notOwner));
+        stakingPool.transferOwnership(notOwner);
+    }
+
+    function test_transferOwnership_NotPendingOwner() public {
+        address newOwner = makeAddr("newOwner");
+        address notPendingOwner = makeAddr("notPendingOwner");
+        stakingPool.transferOwnership(newOwner);
+        vm.prank(notPendingOwner);
+        vm.expectRevert(
+            abi.encodeWithSelector(OwnableUpgradeable.OwnableUnauthorizedAccount.selector, notPendingOwner)
+        );
+        stakingPool.acceptOwnership();
+    }
+
     function test_getValidatorPubkey() public view {
         assertEq(stakingPool.getValidatorPubkey(), fixtureValidatorData.pubkey);
     }

@@ -3,7 +3,7 @@ pragma solidity ^0.8.30;
 
 import { IBeaconDeposit } from "@pol/interfaces/IBeaconDeposit.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 
 import { StBERA } from "src/base/StBERA.sol";
@@ -13,7 +13,7 @@ import { IStakingRewardsVault } from "src/interfaces/IStakingRewardsVault.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { IWithdrawalVault } from "src/interfaces/IWithdrawalVault.sol";
 
-contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgradeable {
+contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepUpgradeable {
     // CONSTANTS
 
     /// @dev Reference to BeaconDepositContract on Berachain.

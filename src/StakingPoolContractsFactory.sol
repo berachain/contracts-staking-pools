@@ -1,7 +1,7 @@
 /// SPDX-License-Identifier: BUSL-1.1
 pragma solidity ^0.8.30;
 
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@solady/src/utils/UpgradeableBeacon.sol";
 import { LibClone } from "@solady/src/utils/LibClone.sol";
@@ -16,7 +16,7 @@ import { IStakingPoolContractsFactory, ICoreContractsStorage } from "src/interfa
 contract StakingPoolContractsFactory is
     IStakingPoolContractsFactory,
     BeaconRootsHelper,
-    OwnableUpgradeable,
+    Ownable2StepUpgradeable,
     UUPSUpgradeable
 {
     // CONSTANTS
