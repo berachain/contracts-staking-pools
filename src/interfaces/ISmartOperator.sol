@@ -13,13 +13,21 @@ interface ISmartOperator {
     error InvalidProtocolFeePercentage();
     // Signature: 0x32e1a5be
     error StakingPoolIsFullyExited();
+    // Signature: 0xd92e233d
+    error ZeroAddress();
 
     // EVENTS
 
     event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
     event BGTRedeemed(address receiver, uint256 amount);
+    event RewardAllocatorSet(address rewardAllocator);
 
     // FUNCTIONS
+
+    /// @notice Sets the reward allocator for the validator key on the BeraChef contract.
+    /// @dev Can only be called by the validator admin role.
+    /// @param rewardAllocator The address of the reward allocator.
+    function setRewardAllocator(address rewardAllocator) external;
 
     /// @notice This function is used to auto-boost the validator key for the current unboosted amount of BGT.
     /// @dev Only enqueues boost if not already queued to avoid spamming the queue.

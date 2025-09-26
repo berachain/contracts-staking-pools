@@ -360,6 +360,34 @@ contract SmartOperatorTest is Base {
         smartOperator.queueBoost();
     }
 
+    function test_setRewardAllocator() public {
+        address rewardAllocator = makeAddr("rewardAllocator");
+
+        vm.expectEmit(true, true, true, true);
+        emit ISmartOperator.RewardAllocatorSet(rewardAllocator);
+        smartOperator.setRewardAllocator(rewardAllocator);
+    }
+
+    function test_setRewardAllocator_RevertWhen_NotValidatorAdmin() public {
+        address notValidatorAdmin = makeAddr("notValidatorAdmin");
+        address rewardAllocator = makeAddr("rewardAllocator");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAccessControl.AccessControlUnauthorizedAccount.selector,
+                notValidatorAdmin,
+                smartOperator.VALIDATOR_ADMIN_ROLE()
+            )
+        );
+        vm.prank(notValidatorAdmin);
+        smartOperator.setRewardAllocator(rewardAllocator);
+    }
+
+    function test_setRewardAllocator_RevertWhen_ZeroAddress() public {
+        vm.expectRevert(ISmartOperator.ZeroAddress.selector);
+        smartOperator.setRewardAllocator(address(0));
+    }
+
     function test_accrueEarnedBGTFees() public {
         _helper_activateStakingPool(10_000 ether);
 

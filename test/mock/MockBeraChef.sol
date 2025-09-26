@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 contract MockBeraChef {
     uint96 internal constant ONE_HUNDRED_PERCENT = 1e4;
+    mapping(bytes valPubkey => address rewardAllocator) public valRewardAllocator;
 
     mapping(bytes valPubkey => uint96 valCommission) internal valCommission;
 
@@ -12,5 +13,9 @@ contract MockBeraChef {
 
     function getValCommission(bytes memory valPubkey) public view returns (uint96) {
         return valCommission[valPubkey];
+    }
+
+    function setValRewardAllocator(bytes memory valPubkey, address rewardAllocator) public {
+        valRewardAllocator[valPubkey] = rewardAllocator;
     }
 }

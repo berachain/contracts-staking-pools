@@ -101,6 +101,15 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    function setRewardAllocator(address rewardAllocator) external onlyRole(VALIDATOR_ADMIN_ROLE) {
+        if (rewardAllocator == address(0)) {
+            revert ZeroAddress();
+        }
+        BERA_CHEF.setValRewardAllocator(_pubkey, rewardAllocator);
+        emit RewardAllocatorSet(rewardAllocator);
+    }
+
+    /// @inheritdoc ISmartOperator
     function queueBoost() external whenNotFullyExited returns (bool) {
         (, uint128 queuedBalance) = BGT.boostedQueue(address(this), _pubkey);
         if (queuedBalance == 0) {
