@@ -111,7 +111,11 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
     /// @inheritdoc IIncentiveCollector
     function recoverERC20(address[] calldata tokens, address receiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
         for (uint256 i = 0; i < tokens.length; i++) {
-            IERC20(tokens[i]).transfer(receiver, IERC20(tokens[i]).balanceOf(address(this)));
+            IERC20 token = IERC20(tokens[i]);
+            uint256 balance = token.balanceOf(address(this));
+            if (balance > 0) {
+                token.safeTransfer(receiver, balance);
+            }
         }
     }
 
