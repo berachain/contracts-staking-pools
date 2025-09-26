@@ -93,6 +93,29 @@ contract IncentiveCollectorTest is Base {
         incentiveCollector.queuePayoutAmountChange(2);
     }
 
+    function test_setFeePercentage(uint256 feePercentage) public {
+        feePercentage = _bound(feePercentage, 0, 2000);
+        uint96 defaultFeePercentage = incentiveCollector.feePercentage();
+        assertEq(defaultFeePercentage, 0); // default fee percentage is 0
+
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(uint96(feePercentage));
+
+        // The fee percentage should still be the default until the change is applied
+        assertEq(incentiveCollector.feePercentage(), defaultFeePercentage);
+
+        // Now trigger the fee percentage change by calling claim
+        address claimer = makeAddr("claimer");
+        uint256 payoutAmount = incentiveCollector.payoutAmount();
+        vm.deal(claimer, payoutAmount);
+
+        vm.prank(claimer);
+        incentiveCollector.claim{ value: payoutAmount }(incentiveTokens);
+
+        // After the claim, the fee percentage should be updated
+        assertEq(incentiveCollector.feePercentage(), feePercentage);
+    }
+
     function test_claim() public {
         uint256 payoutAmount = incentiveCollector.payoutAmount();
 
@@ -130,8 +153,8 @@ contract IncentiveCollectorTest is Base {
 
     function test_claim_withProtocolFee() public {
         uint256 payoutAmount = incentiveCollector.payoutAmount();
-        vm.prank(address(smartOperator));
-        incentiveCollector.queueFeePercentageChange(1000); // 10%
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
 
         test_claim();
 

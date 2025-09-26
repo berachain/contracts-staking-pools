@@ -80,6 +80,10 @@ interface ISmartOperator {
     /// @param protocolFeePercentage_ The new fee percentage value.
     function setProtocolFeePercentage(uint96 protocolFeePercentage_) external;
 
+    /// @notice Returns the current protocol fee percentage.
+    /// @return The current protocol fee percentage.
+    function protocolFeePercentage() external view returns (uint96);
+
     /// @notice Accrues the base rate fees.
     /// @dev Fees are accrued only on balance not yet charged.
     function accrueEarnedBGTFees() external;

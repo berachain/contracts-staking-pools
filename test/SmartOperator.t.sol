@@ -158,7 +158,7 @@ contract SmartOperatorTest is Base {
         smartOperator.grantRole(validatorFeeManagerRole, validatorFeeManager);
     }
 
-    function test_setIncentiveCollectorPayoutAmount() public {
+    function test_queueIncentiveCollectorPayoutAmount() public {
         address incentiveCollectorManager = makeAddr("incentiveCollectorManager");
         test_grantRole_IncentiveCollectorManagerRole();
 
@@ -172,7 +172,7 @@ contract SmartOperatorTest is Base {
         smartOperator.queueIncentiveCollectorPayoutAmountChange(100_000 ether);
     }
 
-    function test_setIncentiveCollectorPayoutAmount_Fail_NotIncentiveCollectorManager() public {
+    function test_queueIncentiveCollectorPayoutAmount_Fail_NotIncentiveCollectorManager() public {
         address notIncentiveCollectorManager = makeAddr("notIncentiveCollectorManager");
         test_grantRole_IncentiveCollectorManagerRole();
 

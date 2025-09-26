@@ -22,7 +22,6 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
     uint256 public payoutAmount;
     uint256 public queuedPayoutAmount;
     uint96 public feePercentage;
-    uint96 public queuedFeePercentage;
     address internal _stakingPool;
     address internal _smartOperator;
     address internal _stakingRewardsVault;
@@ -67,12 +66,6 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
         queuedPayoutAmount = newPayoutAmount;
     }
 
-    function queueFeePercentageChange(uint96 newFeePercentage) external {
-        _validateSender(_smartOperator);
-        emit QueuedFeePercentage(newFeePercentage, feePercentage);
-        queuedFeePercentage = newFeePercentage;
-    }
-
     /// @inheritdoc IIncentiveCollector
     function claim(address[] calldata tokens) external payable {
         if (IStakingPool(_stakingPool).isFullyExited()) {
@@ -111,7 +104,8 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
         emit IncentiveTokensClaimed(msg.sender, payoutAmount, fee);
 
         if (queuedPayoutAmount != 0) _setPayoutAmount();
-        if (queuedFeePercentage != 0) _setFeePercentage();
+        uint96 protocolFeePercentage = ISmartOperator(_smartOperator).protocolFeePercentage();
+        if (protocolFeePercentage != feePercentage) _setFeePercentage(protocolFeePercentage);
     }
 
     /// @inheritdoc IIncentiveCollector
@@ -144,10 +138,9 @@ contract IncentiveCollector is IIncentiveCollector, AccessControlUpgradeable {
     }
 
     /// @notice Set the fee percentage to the queued fee percentage
-    function _setFeePercentage() internal {
-        emit FeePercentageSet(feePercentage, queuedFeePercentage);
-        feePercentage = queuedFeePercentage;
-        queuedFeePercentage = 0;
+    function _setFeePercentage(uint96 newFeePercentage) internal {
+        emit FeePercentageSet(feePercentage, newFeePercentage);
+        feePercentage = newFeePercentage;
     }
 
     function _computeFee(uint256 amount) internal view returns (uint256) {

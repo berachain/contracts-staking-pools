@@ -24,11 +24,6 @@ interface IIncentiveCollector {
     /// @param newValue The new value for fee percentage.
     event FeePercentageSet(uint96 oldValue, uint96 newValue);
 
-    /// @notice Emitted when fee percentage is queued by admin.
-    /// @param newFeePercentage The new value for fee percentage.
-    /// @param oldFeePercentage The previous value for fee percentage.
-    event QueuedFeePercentage(uint96 newFeePercentage, uint96 oldFeePercentage);
-
     /// @notice Emitted when one token is claimed.
     /// @param from The address of the claimer.
     /// @param token The address of the token.
@@ -69,11 +64,6 @@ interface IIncentiveCollector {
     /// @param newPayoutAmount The new payout amount in native tokens.
     /// @custom:throws PayoutAmountIsZero if the new payout amount is zero.
     function queuePayoutAmountChange(uint256 newPayoutAmount) external;
-
-    /// @notice Queues a fee percentage change.
-    /// @dev Admin function.
-    /// @param newFeePercentage The new fee percentage.
-    function queueFeePercentageChange(uint96 newFeePercentage) external;
 
     /// @notice Emergency function to recover ERC20 tokens from the incentive collector.
     /// @dev Callable only by the admin.
