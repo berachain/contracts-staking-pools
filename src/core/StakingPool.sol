@@ -183,6 +183,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
 
         if (newTotalDeposits == 0) {
             _triggerFullExit();
+            IWithdrawalVault(_withdrawalVault).notifyFullExitFromCL(_pubkey);
         } else {
             totalDeposits = newTotalDeposits;
 
@@ -379,8 +380,6 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, OwnableUpgrad
             _collectRewards(rewardsToWithdraw);
             SafeTransferLib.safeTransferETH(_withdrawalVault, rewardsToWithdraw);
         }
-
-        IWithdrawalVault(_withdrawalVault).notifyFullExitFromCL(_pubkey);
         isFullyExited = true;
         _pause();
 

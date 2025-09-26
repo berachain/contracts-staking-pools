@@ -209,6 +209,7 @@ contract WithdrawalVault is
             // For full exit withdrawals, set amount to 0 and mark as exited
             if (isFullExitWithdraw) {
                 assetsInGWei = 0;
+                _isFullyExited[pubkey] = true;
             }
 
             uint256 feeToPay = _getWithdrawalRequestFee();
