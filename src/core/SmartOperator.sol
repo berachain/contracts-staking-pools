@@ -130,9 +130,6 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         }
 
         _updateEarnedBGTFees();
-        // Reset already charged amount
-        // Resetting state here is safe since any BGT donated/received after this point won't affect accounting.
-        _bgtBalanceAlreadyCharged = 0;
     }
 
     /// @inheritdoc ISmartOperator
@@ -252,7 +249,11 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
     /// @notice Sets the protocol fee percentage for the smart operator.
     /// @param protocolFeePercentage_ The protocol fee percentage to set for the smart operator.
-    function setProtocolFeePercentage(uint96 protocolFeePercentage_) external onlyRole(PROTOCOL_FEE_MANAGER_ROLE) {
+    function setProtocolFeePercentage(uint96 protocolFeePercentage_)
+        external
+        whenNotFullyExited
+        onlyRole(PROTOCOL_FEE_MANAGER_ROLE)
+    {
         if (protocolFeePercentage_ > MAX_PROTOCOL_FEE) {
             revert InvalidProtocolFeePercentage();
         }
@@ -265,13 +266,8 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
-    function accrueEarnedBGTFees() external {
+    function accrueEarnedBGTFees() external whenNotFullyExited {
         _updateEarnedBGTFees();
-        // Update the base rate charged to match current BGT balance to prevent double fee charging.
-        // When BGTs are redeemed, they are burned and the equivalent BERA is deposited into the staking pool.
-        // Since this deposit is already accounted as yield and had fees charged, we update the base rate
-        // to avoid charging fees again on the same amount in future calculations.
-        _bgtBalanceAlreadyCharged = BGT.balanceOf(address(this));
     }
 
     /// @inheritdoc ISmartOperator

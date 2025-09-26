@@ -215,6 +215,19 @@ contract SmartOperatorTest is Base {
         smartOperator.setProtocolFeePercentage(1000);
     }
 
+    function test_setProtocolFeePercentage_Fail_StakingPoolFullyExited() public {
+        test_grantRole_ProtocolFeeManagerRole();
+
+        // set isFullyExited to true
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
+        uint256 newValue = currentValue | (1 << 8);
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
+
+        vm.prank(validatorFeeManager);
+        vm.expectRevert(ISmartOperator.StakingPoolIsFullyExited.selector);
+        smartOperator.setProtocolFeePercentage(1000);
+    }
+
     function test_redeem_NoFee() public {
         mockBGT.mint(address(smartOperator), 100 ether);
 
@@ -313,5 +326,100 @@ contract SmartOperatorTest is Base {
 
         vm.expectRevert(ISmartOperator.StakingPoolIsFullyExited.selector);
         smartOperator.queueBoost();
+    }
+
+    function test_accrueEarnedBGTFees() public {
+        _helper_activateStakingPool(10_000 ether);
+
+        // Set protocol fee to 10%
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000);
+
+        // Mint some BGT to smart operator
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        // Call accrueEarnedBGTFees
+        smartOperator.accrueEarnedBGTFees();
+
+        // Verify fees were charged and shares minted
+        // 10% of 100 ether = 10 ether in fees
+        uint256 expectedShares = stakingPool.previewDeposit(10 ether); // 10% of 100 ether
+        assertEq(stakingPool.balanceOf(address(this)), 10_000 ether + expectedShares);
+
+        // Verify bgtBalanceAlreadyCharged was updated
+        (, uint256 bgtBalanceAlreadyCharged,,) = smartOperator.getEarnedBGTFeeState();
+        assertEq(bgtBalanceAlreadyCharged, 100 ether);
+    }
+
+    function test_accrueEarnedBGTFees_NoFees() public {
+        // Protocol fee is 0 by default
+
+        // Mint some BGT to smart operator
+        mockBGT.mint(address(smartOperator), 100 ether);
+
+        // Call accrueEarnedBGTFees
+        smartOperator.accrueEarnedBGTFees();
+
+        // Verify no fees were charged
+        assertEq(stakingPool.balanceOf(address(this)), 0);
+
+        // Verify bgtBalanceAlreadyCharged was still updated
+        (, uint256 bgtBalanceAlreadyCharged,,) = smartOperator.getEarnedBGTFeeState();
+        assertEq(bgtBalanceAlreadyCharged, 100 ether);
+    }
+
+    function test_accrueEarnedBGTFees_UpdateFeeRate() public {
+        _helper_activateStakingPool(10_000 ether);
+
+        // Initially mint BGT with 0% fee
+        mockBGT.mint(address(smartOperator), 100 ether);
+        smartOperator.accrueEarnedBGTFees();
+
+        // Verify no fees were charged on initial amount
+        assertEq(stakingPool.balanceOf(address(this)), 10_000 ether);
+        (, uint256 bgtBalanceAlreadyCharged,,) = smartOperator.getEarnedBGTFeeState();
+        assertEq(bgtBalanceAlreadyCharged, 100 ether);
+
+        // Set protocol fee to 10%
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000);
+
+        // Mint additional BGT
+        mockBGT.mint(address(smartOperator), 50 ether);
+
+        // Accrue fees
+        uint256 expectedShares = stakingPool.previewDeposit(5 ether); // 10% of 50 ether
+        smartOperator.accrueEarnedBGTFees();
+
+        // Verify fees were only charged on new amount
+        // 10% of 50 ether = 5 ether in fees
+        assertEq(stakingPool.balanceOf(address(this)), 10_000 ether + expectedShares);
+
+        // Verify bgtBalanceAlreadyCharged tracks total
+        (, bgtBalanceAlreadyCharged,,) = smartOperator.getEarnedBGTFeeState();
+        assertEq(bgtBalanceAlreadyCharged, 150 ether);
+    }
+
+    function test_accrueEarnedBGTFees_Fail_StakingPoolFullExited() public {
+        // set isFullyExited to true
+        uint256 currentValue = uint256(vm.load(address(stakingPool), bytes32(uint256(63))));
+        uint256 newValue = currentValue | (1 << 8);
+        vm.store(address(stakingPool), bytes32(uint256(63)), bytes32(newValue));
+
+        vm.expectRevert(ISmartOperator.StakingPoolIsFullyExited.selector);
+        smartOperator.accrueEarnedBGTFees();
+    }
+
+    function _helper_activateStakingPool(uint256 initialDepositAmount) internal {
+        assertTrue(stakingPool.paused());
+
+        vm.prank(address(stakingPoolContractsFactory));
+        stakingPool.activate(initialDepositAmount);
+
+        assertTrue(stakingPool.isActive());
+        assertFalse(stakingPool.paused());
+        assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(address(this))), initialDepositAmount);
     }
 }
