@@ -85,7 +85,7 @@ abstract contract StBERA is IStBera {
 
     /// @inheritdoc IStBera
     function previewRedeem(uint256 shares) public view virtual returns (uint256) {
-        return _convertToAssets(shares, Math.Rounding.Ceil);
+        return _convertToAssets(shares, Math.Rounding.Floor);
     }
 
     // INTERNAL FUNCTIONS
