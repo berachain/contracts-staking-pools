@@ -101,6 +101,7 @@ contract WithdrawalVault is
         payable
         nonReentrant
         whenNotPaused
+        returns (uint256 requestId)
     {
         ICoreContractsStorage.CoreContracts memory coreContracts = _factory.getCoreContracts(pubkey);
         uint256 assetsInWei = IStBera(coreContracts.stakingPool).previewRedeem(shares);
@@ -108,7 +109,7 @@ contract WithdrawalVault is
         // Round down to the nearest GWei
         uint64 assetsInGWei = uint64(assetsInWei / 1 gwei);
 
-        _withdraw(pubkey, assetsInGWei, maxFeeToPay);
+        requestId = _withdraw(pubkey, assetsInGWei, maxFeeToPay);
     }
 
     /// @inheritdoc IWithdrawalVault
@@ -121,8 +122,9 @@ contract WithdrawalVault is
         payable
         nonReentrant
         whenNotPaused
+        returns (uint256 requestId)
     {
-        _withdraw(pubkey, assetsInGWei, maxFeeToPay);
+        requestId = _withdraw(pubkey, assetsInGWei, maxFeeToPay);
     }
 
     /// @inheritdoc IWithdrawalVault
@@ -190,7 +192,14 @@ contract WithdrawalVault is
     }
 
     /// @dev Handles the withdrawal request
-    function _withdraw(bytes memory pubkey, uint64 assetsInGWei, uint256 maxFeeToPay) internal {
+    function _withdraw(
+        bytes memory pubkey,
+        uint64 assetsInGWei,
+        uint256 maxFeeToPay
+    )
+        internal
+        returns (uint256 requestId)
+    {
         // Zero means full exit.
         if (assetsInGWei == 0) {
             revert InvalidAmount();
@@ -230,7 +239,7 @@ contract WithdrawalVault is
         }
 
         allocatedWithdrawalsAmount[pubkey] += amountInWei;
-        uint256 requestId = _mintWithdrawalRequest(pubkey, amountInWei, shares);
+        requestId = _mintWithdrawalRequest(pubkey, amountInWei, shares);
 
         emit WithdrawalRequested(msg.sender, amountInWei, shares, requestId, isFullExitWithdraw);
     }
@@ -238,8 +247,9 @@ contract WithdrawalVault is
     /// @dev Finalizes a withdrawal request
     function _finalizeWithdrawalRequest(uint256 requestId) internal {
         WithdrawalRequest storage request = withdrawalRequests[requestId];
-        if (request.requestBlock == 0) {
-            revert InvalidRequest();
+
+        if (msg.sender != request.user) {
+            revert InvalidSender();
         }
 
         if (block.number < (request.requestBlock + WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY)) {

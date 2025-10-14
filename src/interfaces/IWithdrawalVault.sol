@@ -34,8 +34,6 @@ interface IWithdrawalVault {
     error InsufficientFee();
     // Signature: 0x2c5211c6
     error InvalidAmount();
-    // Signature: 0x41abc801
-    error InvalidRequest();
     // Signature: 0xecc7a37c
     error RequestNotReady();
     // Signature: 0x81b5ad68
@@ -73,8 +71,16 @@ interface IWithdrawalVault {
     /// @param pubkey The validator's public key.
     /// @param assetsInGWei The amount of BERA to withdraw in GWei.
     /// @param maxFeeToPay The maximum fee the user is willing to pay for the withdrawal (EIP-7002).
+    /// @return requestId The ID of the withdrawal request.
     /// @custom:throws InvalidAmount if assetsInGWei is 0.
-    function requestWithdrawal(bytes memory pubkey, uint64 assetsInGWei, uint256 maxFeeToPay) external payable;
+    function requestWithdrawal(
+        bytes memory pubkey,
+        uint64 assetsInGWei,
+        uint256 maxFeeToPay
+    )
+        external
+        payable
+        returns (uint256 requestId);
 
     /// @notice Requests a redemption of shares from the staking pool.
     /// @dev Creates an NFT representing the redemption that will be necessary to finalize the request.
@@ -83,8 +89,16 @@ interface IWithdrawalVault {
     /// @param pubkey The validator's public key.
     /// @param shares The amount of shares to redeem.
     /// @param maxFeeToPay The maximum fee the user is willing to pay for the redemption (EIP-7002).
+    /// @return requestId The ID of the redemption request.
     /// @custom:throws InvalidAmount if shares is 0.
-    function requestRedeem(bytes memory pubkey, uint256 shares, uint256 maxFeeToPay) external payable;
+    function requestRedeem(
+        bytes memory pubkey,
+        uint256 shares,
+        uint256 maxFeeToPay
+    )
+        external
+        payable
+        returns (uint256 requestId);
 
     /// @notice Finalizes a withdrawal request.
     /// @param requestId The ID of the withdrawal request to finalize.

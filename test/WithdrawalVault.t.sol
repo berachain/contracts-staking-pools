@@ -251,11 +251,11 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.finalizeWithdrawalRequest(0);
     }
 
-    function test_finalizeWithdrawalRequest_Fail_InvalidRequest() public {
+    function test_finalizeWithdrawalRequest_Fail_InvalidSender() public {
         test_finalizeWithdrawalRequest();
 
         vm.prank(alice);
-        vm.expectRevert(IWithdrawalVault.InvalidRequest.selector);
+        vm.expectRevert(IWithdrawalVault.InvalidSender.selector);
         withdrawalVault.finalizeWithdrawalRequest(0);
     }
 
