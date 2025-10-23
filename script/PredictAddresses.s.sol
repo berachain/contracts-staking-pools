@@ -9,10 +9,13 @@ import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
+import { DelegationHandlerFactory } from "src/delegation/DelegationHandlerFactory.sol";
+import { DelegationHandler } from "src/delegation/DelegationHandler.sol";
 import {
     ACCOUNTING_ORACLE_PROXY_SALT,
     STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,
-    WITHDRAWAL_VAULT_PROXY_SALT
+    WITHDRAWAL_VAULT_PROXY_SALT,
+    DELEGATION_HANDLER_FACTORY_PROXY_SALT
 } from "./Salts.sol";
 
 contract ImplementationPredictAddressesScript is BasePredictScript {
@@ -41,5 +44,22 @@ contract ImplementationPredictAddressesScript is BasePredictScript {
         _predictAddress("SmartOperator Implementation", type(SmartOperator).creationCode, 0);
         _predictAddress("StakingRewardsVault Implementation", type(StakingRewardsVault).creationCode, 0);
         _predictAddress("IncentiveCollector Implementation", type(IncentiveCollector).creationCode, 0);
+
+        _predictProxyAddress(
+            "DelegationHandlerFactory",
+            type(DelegationHandlerFactory).creationCode,
+            DELEGATION_HANDLER_FACTORY_PROXY_SALT,
+            DELEGATION_HANDLER_FACTORY_PROXY_SALT
+        );
+        _predictAddress(
+            "DelegationHandlerFactory Implementation",
+            type(DelegationHandlerFactory).creationCode,
+            DELEGATION_HANDLER_FACTORY_PROXY_SALT
+        );
+        _predictAddress(
+            "DelegationHandler Implementation",
+            type(DelegationHandler).creationCode,
+            DELEGATION_HANDLER_FACTORY_PROXY_SALT
+        );
     }
 }

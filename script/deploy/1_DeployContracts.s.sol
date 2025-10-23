@@ -25,10 +25,10 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
     Deployer internal deployer;
 
     function run() public virtual broadcast {
-        deployContracts();
+        console2.log("Run specific function");
     }
 
-    function deployContracts() internal {
+    function deployContracts(address governance) external broadcast {
         console2.log("Deploying AccountingOracle, StakingPoolContractsFactory and WithdrawalVault...");
         _validateCode("Incentive Collector Impl", INCENTIVE_COLLECTOR_IMPL_ADDRESS);
         _validateCode("Smart Operator Impl", SMART_OPERATOR_IMPL_ADDRESS);
@@ -36,7 +36,7 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, Storage {
         _validateCode("Staking Rewards Vault Impl", STAKING_REWARDS_VAULT_IMPL_ADDRESS);
 
         deployer = new Deployer(
-            msg.sender,
+            governance,
             ACCOUNTING_ORACLE_PROXY_SALT,
             STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,
             WITHDRAWAL_VAULT_PROXY_SALT,

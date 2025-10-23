@@ -7,7 +7,7 @@ import { DeployStakingPoolScript } from "script/deploy/implementations/DeploySta
 import { DeploySmartOperatorScript } from "script/deploy/implementations/DeploySmartOperator.s.sol";
 import { DeployStakingRewardsVaultScript } from "script/deploy/implementations/DeployStakingRewardsVault.s.sol";
 
-contract DeployImplementationsScript is
+contract DeployCoreContractsImplementationsScript is
     DeployIncentiveCollectorScript,
     DeployStakingPoolScript,
     DeploySmartOperatorScript,
