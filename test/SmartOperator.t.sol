@@ -472,6 +472,35 @@ contract SmartOperatorTest is Base {
         smartOperator.accrueEarnedBGTFees();
     }
 
+    function test_unqueueBoostOrDropBoostOnFullExit() public {
+        address bgtManager = makeAddr("bgtManager");
+        bytes32 bgtManagerRole = smartOperator.BGT_MANAGER_ROLE();
+        smartOperator.grantRole(bgtManagerRole, bgtManager);
+
+        mockBGT.mint(address(smartOperator), 100 ether);
+        smartOperator.queueBoost();
+        (, uint128 queuedBoost) = mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        smartOperator.activateBoost();
+
+        mockBGT.mint(address(smartOperator), 100 ether);
+        vm.prank(bgtManager);
+        smartOperator.queueDropBoost(50 ether);
+        smartOperator.queueBoost();
+
+        (, queuedBoost) = mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        (, uint128 queuedDropBoost) = mockBGT.dropBoostQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        assertEq(queuedBoost, 100 ether);
+        assertEq(queuedDropBoost, 50 ether);
+
+        vm.prank(address(stakingPool));
+        smartOperator.fullExitQueueDropBoost();
+
+        (, queuedBoost) = mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        (, queuedDropBoost) = mockBGT.dropBoostQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        assertEq(queuedBoost, 0);
+        assertEq(queuedDropBoost, 100 ether); // full exit queue drop boost
+    }
+
     function _helper_activateStakingPool(uint256 initialDepositAmount) internal {
         assertTrue(stakingPool.paused());
 

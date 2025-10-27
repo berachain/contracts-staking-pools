@@ -54,9 +54,9 @@ contract MockBGT is ERC20 {
         }
     }
 
-    function activateBoost(address user, bytes calldata pubkey) external {
+    function activateBoost(address user, bytes calldata pubkey) external returns (bool) {
         QueuedBoost storage qb = boostedQueue[user][pubkey];
-        (, uint128 amount) = (qb.blockNumberLast, qb.balance);
+        uint128 amount = qb.balance;
 
         totalBoosts += amount;
         unchecked {
@@ -69,6 +69,7 @@ contract MockBGT is ERC20 {
         delete boostedQueue[user][pubkey];
 
         // IBGTStaker(staker).stake(user, amount);
+        return true;
     }
 
     function queueDropBoost(bytes calldata pubkey, uint128 amount) external {

@@ -134,6 +134,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     function fullExitQueueDropBoost() external {
         _validateSender(_stakingPool);
         _cancelQueueBoost();
+        _cancelQueueDropBoost();
 
         uint128 amount = BGT.boosted(address(this), _pubkey);
         if (amount > 0) {
@@ -302,6 +303,15 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         (, uint128 balance) = BGT.boostedQueue(address(this), _pubkey);
         if (balance > 0) {
             BGT.cancelBoost(_pubkey, uint128(balance));
+        }
+    }
+
+    /// @dev Cancel any queued drop boost for the smart operator.
+    /// @dev Used to cancel any queued drop boost for the smart operator if dropping during a full exit.
+    function _cancelQueueDropBoost() internal {
+        (, uint128 balance) = BGT.dropBoostQueue(address(this), _pubkey);
+        if (balance > 0) {
+            BGT.cancelDropBoost(_pubkey, balance);
         }
     }
 
