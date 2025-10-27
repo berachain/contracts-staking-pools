@@ -477,6 +477,26 @@ contract StakingPoolTest is Base {
         assertFalse(isFullyExited);
     }
 
+    function test_notifyWithdrawalRequest_BufferedAssetsUnderflow() public {
+        test_activate();
+        _helper_submit(alice, 250_000 ether);
+        assertEq(stakingPool.activeThresholdReached(), true);
+
+        _helper_submit(alice, 10 ether);
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 100_000 ether);
+        mockBGT.mint(address(_getSmartOperator(fixtureValidatorData.pubkey)), 100_000 ether);
+
+        assertEq(stakingPool.bufferedAssets(), 10 ether);
+
+        vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+        uint256 withdrawalAmount = stakingPool.previewRedeem(stakingPool.balanceOf(alice));
+        // Withdrawal amount is greater than total deposits + buffered assets
+        vm.prank(address(withdrawalVault));
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.FullExitTriggered();
+        stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
+    }
+
     function test_totalAssets(uint256 userDepositAmount, uint128 donationAmount) public {
         (uint256 boundedUserDepositAmount,,) = testFuzz_submit(userDepositAmount);
         assertEq(stakingPool.totalAssets(), INITIAL_DEPOSIT_AMOUNT + boundedUserDepositAmount);

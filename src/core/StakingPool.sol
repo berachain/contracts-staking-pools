@@ -174,15 +174,14 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
         }
 
         if (!isFullyExited) {
-            if (assets > totalDeposits) {
-                bufferedAssets -= (assets - totalDeposits);
+            // Check if withdrawal amount exceeds total deposits or would leave insufficient balance,
+            // which can happen as share values appreciate from accumulated rewards.
+            if (assets > totalDeposits || (totalDeposits - assets) < minEffectiveBalance()) {
+                _triggerFullExit();
+                _frozenTotalAssets -= assets;
                 totalDeposits = 0;
             } else {
                 totalDeposits -= assets;
-            }
-
-            if (totalDeposits < minEffectiveBalance()) {
-                _triggerFullExit();
             }
         } else {
             _frozenTotalAssets -= assets;
@@ -417,6 +416,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
             _collectRewards(rewardsToWithdraw);
             SafeTransferLib.safeTransferETH(_withdrawalVault, rewardsToWithdraw);
         }
+
         isFullyExited = true;
         _pause();
 
