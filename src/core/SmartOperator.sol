@@ -174,6 +174,9 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
         if (balance > 0) {
             BGT.redeem(receiver, balance);
+            // Reset the charged balance after a full exit to prevent reverting or inaccurate results
+            // when invoking view/helper functions that expect _bgtBalanceAlreadyCharged <= current balance.
+            _bgtBalanceAlreadyCharged = 0;
             emit BGTRedeemed(receiver, balance);
         }
     }
