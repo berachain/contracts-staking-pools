@@ -11,7 +11,14 @@ interface IStakingPool {
     event TotalDepositsUpdated(uint256 newTotalDeposits);
     event ActiveThresholdReached();
     event MinEffectiveBalanceUpdated(uint256 newMinEffectiveBalance);
-
+    event DepositSubmitted(
+        address indexed receiver,
+        uint256 userDepositAmount,
+        uint256 shares,
+        uint256 rewardsCollected,
+        uint256 bufferedAssets,
+        uint256 totalDeposits
+    );
     // ERRORS
 
     // Signature: 0x6cbf06ef

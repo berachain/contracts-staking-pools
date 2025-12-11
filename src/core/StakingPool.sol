@@ -266,6 +266,8 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
         if (refundAmount > 0) {
             SafeTransferLib.safeTransferETH(msg.sender, refundAmount);
         }
+
+        emit DepositSubmitted(receiver, userDepositAmount, shares, rewardsToCollect, bufferedAssets, totalDeposits);
     }
 
     /// @dev Deposits the given amount to CL.
