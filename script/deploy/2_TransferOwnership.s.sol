@@ -8,28 +8,24 @@ import { Storage } from "script/base/Storage.sol";
 import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
-import {
-    STAKING_POOL_CONTRACTS_FACTORY_ADDRESS,
-    ACCOUNTING_ORACLE_ADDRESS,
-    WITHDRAWAL_VAULT_ADDRESS
-} from "script/Addresses.sol";
+import { AddressBook } from "script/base/AddressBook.sol";
 
-contract TransferOwnershipScript is RBAC, BaseScript, Storage {
+contract TransferOwnershipScript is RBAC, BaseScript, Storage, AddressBook {
     function run() public virtual {
         console2.log("Run specific function");
     }
 
     function transferOwnership(address newOwner) public broadcast {
-        _transferOwnership("StakingPoolContractsFactory", STAKING_POOL_CONTRACTS_FACTORY_ADDRESS, newOwner);
+        _transferOwnership("StakingPoolContractsFactory", _stakingPoolAddresses.stakingPoolContractsFactory, newOwner);
 
         RBAC.AccountDescription memory deployer = RBAC.AccountDescription({ name: "deployer", addr: msg.sender });
         RBAC.AccountDescription memory governance = RBAC.AccountDescription({ name: "Governance", addr: newOwner });
 
         // AccountingOracle
-        AccountingOracle accountingOracle = AccountingOracle(ACCOUNTING_ORACLE_ADDRESS);
+        AccountingOracle accountingOracle = AccountingOracle(_stakingPoolAddresses.accountingOracle);
         RBAC.RoleDescription memory accountingOracleAdminRole = RBAC.RoleDescription({
             contractName: "AccountingOracle",
-            contractAddr: ACCOUNTING_ORACLE_ADDRESS,
+            contractAddr: _stakingPoolAddresses.accountingOracle,
             name: "DEFAULT_ADMIN_ROLE",
             role: accountingOracle.DEFAULT_ADMIN_ROLE()
         });
@@ -37,10 +33,10 @@ contract TransferOwnershipScript is RBAC, BaseScript, Storage {
         _transferRole(accountingOracleAdminRole, deployer, governance);
 
         // WithdrawalVault
-        WithdrawalVault withdrawalVault = WithdrawalVault(payable(WITHDRAWAL_VAULT_ADDRESS));
+        WithdrawalVault withdrawalVault = WithdrawalVault(payable(_stakingPoolAddresses.withdrawalVault));
         RBAC.RoleDescription memory withdrawalVaultAdminRole = RBAC.RoleDescription({
             contractName: "WithdrawalVault",
-            contractAddr: WITHDRAWAL_VAULT_ADDRESS,
+            contractAddr: _stakingPoolAddresses.withdrawalVault,
             name: "DEFAULT_ADMIN_ROLE",
             role: withdrawalVault.DEFAULT_ADMIN_ROLE()
         });

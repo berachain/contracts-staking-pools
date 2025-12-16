@@ -11,55 +11,33 @@ import { IncentiveCollector } from "src/core/IncentiveCollector.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import { DelegationHandlerFactory } from "src/delegation/DelegationHandlerFactory.sol";
 import { DelegationHandler } from "src/delegation/DelegationHandler.sol";
-import {
-    ACCOUNTING_ORACLE_PROXY_SALT,
-    STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT,
-    WITHDRAWAL_VAULT_PROXY_SALT,
-    DELEGATION_HANDLER_FACTORY_PROXY_SALT
-} from "./Salts.sol";
+import { AddressBook } from "script/base/AddressBook.sol";
 
-contract ImplementationPredictAddressesScript is BasePredictScript {
-    function run() public pure {
+contract ImplementationPredictAddressesScript is BasePredictScript, AddressBook {
+    function run() public view {
         // StakingPoolContractsFactory
-        _predictProxyAddress(
-            "StakingPoolContractsFactory",
-            type(StakingPoolContractsFactory).creationCode,
-            0,
-            STAKING_POOL_CONTRACTS_FACTORY_PROXY_SALT
-        );
-        _predictAddress(
-            "StakingPoolContractsFactory Implementation", type(StakingPoolContractsFactory).creationCode, 0
-        );
+        _predictProxyAddress("StakingPoolContractsFactory", type(StakingPoolContractsFactory).creationCode);
+        _predictAddress("StakingPoolContractsFactory Implementation", type(StakingPoolContractsFactory).creationCode);
 
         // WithdrawalVault
-        _predictProxyAddress("WithdrawalVault", type(WithdrawalVault).creationCode, 0, WITHDRAWAL_VAULT_PROXY_SALT);
-        _predictAddress("WithdrawalVault Implementation", type(WithdrawalVault).creationCode, 0);
+        _predictProxyAddress("WithdrawalVault", type(WithdrawalVault).creationCode);
+        _predictAddress("WithdrawalVault Implementation", type(WithdrawalVault).creationCode);
 
         // AccountingOracle
-        _predictProxyAddress("AccountingOracle", type(AccountingOracle).creationCode, 0, ACCOUNTING_ORACLE_PROXY_SALT);
-        _predictAddress("AccountingOracle Implementation", type(AccountingOracle).creationCode, 0);
+        _predictProxyAddress("AccountingOracle", type(AccountingOracle).creationCode);
+        _predictAddress("AccountingOracle Implementation", type(AccountingOracle).creationCode);
+
+        // DelegationHandlerFactory
+        _predictProxyAddress("DelegationHandlerFactory", type(DelegationHandlerFactory).creationCode);
+        _predictAddress("DelegationHandlerFactory Implementation", type(DelegationHandlerFactory).creationCode);
 
         // Predict implementation address for core components
-        _predictAddress("StakingPool Implementation", type(StakingPool).creationCode, 0);
-        _predictAddress("SmartOperator Implementation", type(SmartOperator).creationCode, 0);
-        _predictAddress("StakingRewardsVault Implementation", type(StakingRewardsVault).creationCode, 0);
-        _predictAddress("IncentiveCollector Implementation", type(IncentiveCollector).creationCode, 0);
+        _predictAddress("StakingPool Implementation", type(StakingPool).creationCode);
+        _predictAddress("SmartOperator Implementation", type(SmartOperator).creationCode);
+        _predictAddress("StakingRewardsVault Implementation", type(StakingRewardsVault).creationCode);
+        _predictAddress("IncentiveCollector Implementation", type(IncentiveCollector).creationCode);
 
-        _predictProxyAddress(
-            "DelegationHandlerFactory",
-            type(DelegationHandlerFactory).creationCode,
-            DELEGATION_HANDLER_FACTORY_PROXY_SALT,
-            DELEGATION_HANDLER_FACTORY_PROXY_SALT
-        );
-        _predictAddress(
-            "DelegationHandlerFactory Implementation",
-            type(DelegationHandlerFactory).creationCode,
-            DELEGATION_HANDLER_FACTORY_PROXY_SALT
-        );
-        _predictAddress(
-            "DelegationHandler Implementation",
-            type(DelegationHandler).creationCode,
-            DELEGATION_HANDLER_FACTORY_PROXY_SALT
-        );
+        // DelegationHandler
+        _predictAddress("DelegationHandler Implementation", type(DelegationHandler).creationCode);
     }
 }

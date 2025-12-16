@@ -5,6 +5,7 @@ import { Create2Deployer } from "src/base/Create2Deployer.sol";
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
 import { WithdrawalVault } from "src/WithdrawalVault.sol";
+import { Salt } from "src/base/Salt.sol";
 
 contract Deployer is Create2Deployer {
     /// @notice The AccountingOracle contract.
@@ -21,33 +22,37 @@ contract Deployer is Create2Deployer {
 
     constructor(
         address governance,
-        uint256 accountingOracleSalt,
-        uint256 withdrawalVaultSalt,
-        uint256 stakingPoolContractsFactorySalt,
+        Salt memory accountingOracleSalt,
+        Salt memory withdrawalVaultSalt,
+        Salt memory stakingPoolContractsFactorySalt,
         address smartOperatorInitialImpl,
         address stakingPoolInitialImpl,
         address stakingRewardsVaultInitialImpl,
         address incentiveCollectorInitialImpl
     ) {
         // Deploy accounting oracle implementation
-        address accountingOracleImpl = deployWithCreate2(accountingOracleSalt, type(AccountingOracle).creationCode);
+        address accountingOracleImpl =
+            deployWithCreate2(accountingOracleSalt.implementation, type(AccountingOracle).creationCode);
         // deploy accounting oracle proxy
-        accountingOracle = AccountingOracle(deployProxyWithCreate2(accountingOracleImpl, accountingOracleSalt));
+        accountingOracle = AccountingOracle(deployProxyWithCreate2(accountingOracleImpl, accountingOracleSalt.proxy));
 
         // Deploy staking pool contracts factory implementation
-        address stakingPoolContractsFactoryImpl =
-            deployWithCreate2(stakingPoolContractsFactorySalt, type(StakingPoolContractsFactory).creationCode);
+        address stakingPoolContractsFactoryImpl = deployWithCreate2(
+            stakingPoolContractsFactorySalt.implementation, type(StakingPoolContractsFactory).creationCode
+        );
 
         // deploy staking pool contracts factory proxy
         stakingPoolContractsFactory = StakingPoolContractsFactory(
-            deployProxyWithCreate2(stakingPoolContractsFactoryImpl, stakingPoolContractsFactorySalt)
+            deployProxyWithCreate2(stakingPoolContractsFactoryImpl, stakingPoolContractsFactorySalt.proxy)
         );
 
         // Deploy withdrawal vault implementation
-        address withdrawalVaultImpl = deployWithCreate2(withdrawalVaultSalt, type(WithdrawalVault).creationCode);
+        address withdrawalVaultImpl =
+            deployWithCreate2(withdrawalVaultSalt.implementation, type(WithdrawalVault).creationCode);
 
         // deploy withdrawal vault proxy
-        withdrawalVault = WithdrawalVault(payable(deployProxyWithCreate2(withdrawalVaultImpl, withdrawalVaultSalt)));
+        withdrawalVault =
+            WithdrawalVault(payable(deployProxyWithCreate2(withdrawalVaultImpl, withdrawalVaultSalt.proxy)));
 
         // initialize the accounting oracle
         accountingOracle.initialize(governance, address(stakingPoolContractsFactory));

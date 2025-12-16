@@ -21,6 +21,7 @@ import { MockBGTStaker } from "test/mock/MockBGTStaker.sol";
 import { MockEIP7002 } from "test/mock/MockEIP7002.sol";
 import { Deployer } from "src/Deployer.sol";
 import { Create2Deployer } from "src/base/Create2Deployer.sol";
+import { Salt } from "src/base/Salt.sol";
 
 abstract contract Base is Test, Create2Deployer {
     address public constant EIP_7002 = 0x00000961Ef480Eb55e80D19ad83579A64c007002;
@@ -29,6 +30,10 @@ abstract contract Base is Test, Create2Deployer {
     address public constant BGT = 0x656b95E550C07a9ffe548bd4085c72418Ceb1dba;
     address public constant BGT_STAKER = 0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6;
     address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
+
+    Salt internal ACCOUNTING_ORACLE_SALT = Salt({ implementation: 0, proxy: 0 });
+    Salt internal WITHDRAWAL_VAULT_SALT = Salt({ implementation: 0, proxy: 0 });
+    Salt internal STAKING_POOL_CONTRACTS_FACTORY_SALT = Salt({ implementation: 0, proxy: 0 });
 
     struct ValidatorData {
         bytes32 beaconBlockRoot;
@@ -76,9 +81,9 @@ abstract contract Base is Test, Create2Deployer {
 
         Deployer deployer = new Deployer(
             address(this),
-            1,
-            1,
-            1,
+            ACCOUNTING_ORACLE_SALT,
+            WITHDRAWAL_VAULT_SALT,
+            STAKING_POOL_CONTRACTS_FACTORY_SALT,
             address(smartOperatorImpl),
             address(stakingPoolImpl),
             address(stakingRewardsVaultImpl),

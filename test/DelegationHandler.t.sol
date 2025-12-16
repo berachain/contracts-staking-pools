@@ -15,6 +15,7 @@ import { IStBera } from "src/interfaces/IStBera.sol";
 import { Base } from "test/base/Base.t.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
+import { Salt } from "src/base/Salt.sol";
 
 contract DelegationHandlerTest is Base {
     DelegationHandlerFactory public delegationHandlerFactory;
@@ -27,11 +28,18 @@ contract DelegationHandlerTest is Base {
     bytes withdrawalCredentials;
     bytes signature = _create96Byte();
 
+    Salt internal DELEGATION_HANDLER_FACTORY_SALT = Salt({ implementation: 0, proxy: 0 });
+    uint256 internal DELEGATION_HANDLER_SALT = 0;
+
     function setUp() public override {
         super.setUp();
 
         DelegationHandlerDeployer delegationHandlerDeployer = new DelegationHandlerDeployer(
-            governance, address(stakingPoolContractsFactory), address(withdrawalVault), 0
+            governance,
+            address(stakingPoolContractsFactory),
+            address(withdrawalVault),
+            DELEGATION_HANDLER_FACTORY_SALT,
+            DELEGATION_HANDLER_SALT
         );
         delegationHandlerFactory = delegationHandlerDeployer.delegationHandlerFactory();
         delegationHandler =

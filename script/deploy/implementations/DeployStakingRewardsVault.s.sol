@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.30;
 
-import { BaseScript } from "script/base/Base.s.sol";
-import { ImplementationDeployer } from "script/logic/ImplementationDeployer.sol";
-import { STAKING_REWARDS_VAULT_IMPL_ADDRESS } from "script/Addresses.sol";
+import { BaseDeployScript } from "script/base/BaseDeploy.s.sol";
+import { AddressBook } from "script/base/AddressBook.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 
-contract DeployStakingRewardsVaultScript is BaseScript, ImplementationDeployer {
+contract DeployStakingRewardsVaultScript is BaseDeployScript, AddressBook {
     function deployStakingRewardsVaultImpl() public virtual broadcast {
         _deployStakingRewardsVaultImpl();
     }
 
     function _deployStakingRewardsVaultImpl() internal returns (address stakingRewardsVaultImpl) {
-        stakingRewardsVaultImpl = deployImplementation(0, type(StakingRewardsVault).creationCode);
-        _checkDeploymentAddress(
-            "StakingRewardsVault Impl", stakingRewardsVaultImpl, STAKING_REWARDS_VAULT_IMPL_ADDRESS
+        stakingRewardsVaultImpl = _deploy(
+            "StakingRewardsVault Impl",
+            type(StakingRewardsVault).creationCode,
+            _stakingPoolAddresses.stakingRewardsVaultImpl
         );
     }
 }
