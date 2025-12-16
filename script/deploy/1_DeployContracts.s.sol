@@ -28,8 +28,8 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, AddressBoo
         deployer = new Deployer(
             governance,
             _saltsForProxy(type(AccountingOracle).creationCode),
-            _saltsForProxy(type(StakingPoolContractsFactory).creationCode),
             _saltsForProxy(type(WithdrawalVault).creationCode),
+            _saltsForProxy(type(StakingPoolContractsFactory).creationCode),
             _stakingPoolAddresses.smartOperatorImpl,
             _stakingPoolAddresses.stakingPoolImpl,
             _stakingPoolAddresses.stakingRewardsVaultImpl,
@@ -51,14 +51,16 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, AddressBoo
         withdrawalVault = deployer.withdrawalVault();
         _checkDeploymentAddress("WithdrawalVault", address(withdrawalVault), _stakingPoolAddresses.withdrawalVault);
 
-        require(stakingPoolContractsFactory.owner() == msg.sender, "StakingPoolContractsFactory owner is not deployer");
+        require(
+            stakingPoolContractsFactory.owner() == governance, "StakingPoolContractsFactory owner is not governance"
+        );
         require(
             stakingPoolContractsFactory.accountingOracle() == _stakingPoolAddresses.accountingOracle,
             "Accounting oracle not set"
         );
 
         // check roles
-        RBAC.AccountDescription memory deployerRBAC = RBAC.AccountDescription({ name: "deployer", addr: msg.sender });
+        RBAC.AccountDescription memory deployerRBAC = RBAC.AccountDescription({ name: "deployer", addr: governance });
 
         RBAC.RoleDescription memory accountingOracleAdminRole = RBAC.RoleDescription({
             contractName: "AccountingOracle",
@@ -67,6 +69,6 @@ contract DeployStakingPoolContractsFactoryScript is RBAC, BaseScript, AddressBoo
             role: accountingOracle.DEFAULT_ADMIN_ROLE()
         });
         _requireRole(accountingOracleAdminRole, deployerRBAC);
-        console2.log("AccountingOracle's DEFAULT_ADMIN_ROLE granted to:", msg.sender);
+        console2.log("AccountingOracle's DEFAULT_ADMIN_ROLE granted to:", governance);
     }
 }
