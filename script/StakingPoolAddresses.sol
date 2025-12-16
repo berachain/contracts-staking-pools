@@ -44,10 +44,10 @@ abstract contract StakingPoolAddressBook {
             accountingOracleImpl: 0xB2850B837d6977515700D33fEBe639a9A778d122,
             delegationHandlerFactory: 0xAd17932a5B1aaeEa73D277a6AE670623F176E0D0,
             delegationHandlerFactoryImpl: 0xb0D76BFFD1B96053AffB27c08f98054b6bdC4D60,
-            smartOperatorImpl: 0xAB08db735569251169f65A652699A2BF98779110,
-            stakingPoolImpl: 0x54cD77BAC651233e1F693f12b4b8814099FEA63E,
-            incentiveCollectorImpl: 0x92Fd346D9fde07550a949cE4C9dfcC3C0b69A285,
-            stakingRewardsVaultImpl: 0xB28C9F7Ca25c0ef5763dfA08FA6C4B4F066e9e0D,
+            stakingPoolImpl: 0xAB08db735569251169f65A652699A2BF98779110,
+            smartOperatorImpl: 0x54cD77BAC651233e1F693f12b4b8814099FEA63E,
+            stakingRewardsVaultImpl: 0x92Fd346D9fde07550a949cE4C9dfcC3C0b69A285,
+            incentiveCollectorImpl: 0xB28C9F7Ca25c0ef5763dfA08FA6C4B4F066e9e0D,
             delegationHandlerImpl: 0x20e8Df7Df5b6E974f5cc9f1A812fbb09Fe0E1E7F
         });
     }
@@ -62,10 +62,10 @@ abstract contract StakingPoolAddressBook {
             accountingOracleImpl: 0x2bF922aDaD6856b5D94bD5b6F1310857912ff228,
             delegationHandlerFactory: 0x0aEf09EC97bAc354d31F180b401454cB76abc395,
             delegationHandlerFactoryImpl: 0xaA31b15CD5B1b0206B4aEaFf9E921a98D48df2E1,
-            smartOperatorImpl: 0x0f831a133C54f6b625119d8C1667bA8841993be3,
-            stakingPoolImpl: 0xFeE42580B913C847cE5cE9F0448EC85C5b7Cda5F,
-            incentiveCollectorImpl: 0x94BEA54Dc2746944318384763B6Ad541Ad55AEBD,
-            stakingRewardsVaultImpl: 0x43D6A52db0cC53e34D49aFe7161Bd75A7f392500,
+            stakingPoolImpl: 0x0f831a133C54f6b625119d8C1667bA8841993be3,
+            smartOperatorImpl: 0xFeE42580B913C847cE5cE9F0448EC85C5b7Cda5F,
+            stakingRewardsVaultImpl: 0x94BEA54Dc2746944318384763B6Ad541Ad55AEBD,
+            incentiveCollectorImpl: 0x43D6A52db0cC53e34D49aFe7161Bd75A7f392500,
             delegationHandlerImpl: 0x0A14f25D12B169d983B8a8C32bC68cD52dDFC0C1
         });
     }
@@ -80,10 +80,10 @@ abstract contract StakingPoolAddressBook {
             accountingOracleImpl: 0x0000000000000000000000000000000000000000,
             delegationHandlerFactory: 0x0000000000000000000000000000000000000000,
             delegationHandlerFactoryImpl: 0x0000000000000000000000000000000000000000,
-            smartOperatorImpl: 0x0000000000000000000000000000000000000000,
             stakingPoolImpl: 0x0000000000000000000000000000000000000000,
-            incentiveCollectorImpl: 0x0000000000000000000000000000000000000000,
+            smartOperatorImpl: 0x0000000000000000000000000000000000000000,
             stakingRewardsVaultImpl: 0x0000000000000000000000000000000000000000,
+            incentiveCollectorImpl: 0x0000000000000000000000000000000000000000,
             delegationHandlerImpl: 0x0000000000000000000000000000000000000000
         });
     }
@@ -98,10 +98,10 @@ abstract contract StakingPoolAddressBook {
             accountingOracleImpl: 0x99a7cAE94E0e7d8eE2185491a802c3f58d2B2489,
             delegationHandlerFactory: 0x5af38f2AD90AFD558DAe73741D5B27c733A3f280,
             delegationHandlerFactoryImpl: 0x7b8f1EB54e49c3098a91a5c085CA8A583B457a91,
-            smartOperatorImpl: 0x922DFaE6b9e86130b209Abb2972BD563e291DC50,
-            stakingPoolImpl: 0x297b03012439d6AF5Ae6F709759962E89C6e0DA6,
-            incentiveCollectorImpl: 0x4314Ab33ABD091F149C3349A44706E25FE37Dab1,
-            stakingRewardsVaultImpl: 0x1890062533ABEA0F7F066168440Ef9002494D097,
+            stakingPoolImpl: 0x922DFaE6b9e86130b209Abb2972BD563e291DC50,
+            smartOperatorImpl: 0x297b03012439d6AF5Ae6F709759962E89C6e0DA6,
+            stakingRewardsVaultImpl: 0x4314Ab33ABD091F149C3349A44706E25FE37Dab1,
+            incentiveCollectorImpl: 0x1890062533ABEA0F7F066168440Ef9002494D097,
             delegationHandlerImpl: 0xF0d27B5590C25e03D1d7b9994e87399149D06472
         });
     }
