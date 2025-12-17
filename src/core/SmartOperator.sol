@@ -6,11 +6,11 @@ import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/Saf
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
+import { IBGTIncentiveDistributor } from "@pol/interfaces/IBGTIncentiveDistributor.sol";
 import { ICoreContractsStorage } from "src/interfaces/ICoreContractsStorage.sol";
 import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
-import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
 
 contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     using SafeERC20 for IERC20;

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.30;
 
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
-import { IBGTIncentiveDistributor } from "src/interfaces/IBGTIncentiveDistributor.sol";
+import { IBGTIncentiveDistributor } from "@pol/interfaces/IBGTIncentiveDistributor.sol";
 
 interface ISmartOperator {
     // ERRORS

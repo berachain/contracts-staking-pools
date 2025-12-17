@@ -20,7 +20,6 @@ interface IStakingRewardsVault {
     // ERRORS
 
     // Signature: 0xddb5de5e
-    // REVIEW keep consistency with others InvalidSender errors
     error InvalidSender();
 
     // FUNCTIONS
