@@ -35,6 +35,8 @@ contract WithdrawalVault is
 
     // CONSTANTS
 
+    /// @notice time required for a withdrawal to be processed on the consensus layer
+    uint256 public constant WITHDRAWAL_FLIGHT_BLOCK_DELAY = 49_153;
     /// @notice 43_200 blocks per day (2 seconds per block) * 3 days
     uint256 public constant WITHDRAWAL_REQUEST_FINALIZATION_BLOCK_DELAY = 129_600;
 
@@ -46,6 +48,7 @@ contract WithdrawalVault is
     mapping(uint256 => WithdrawalRequest) public withdrawalRequests;
     mapping(bytes => uint256) public allocatedWithdrawalsAmount;
     mapping(bytes => bool) internal _isFullyExited;
+    mapping(bytes => uint256) public lastPartialWithdrawalRequestBlock;
 
     constructor() {
         _disableInitializers();
@@ -157,6 +160,22 @@ contract WithdrawalVault is
     }
 
     /// @inheritdoc IWithdrawalVault
+    function retryFullExit(bytes memory pubkey, uint256 maxFeeToPay) external payable nonReentrant whenNotPaused {
+        if (!_isFullyExited[pubkey]) {
+            revert NotFullyExited();
+        }
+
+        if (
+            lastPartialWithdrawalRequestBlock[pubkey] != 0
+                && block.number <= lastPartialWithdrawalRequestBlock[pubkey] + WITHDRAWAL_FLIGHT_BLOCK_DELAY
+        ) {
+            revert PendingWithdrawalInFlight();
+        }
+
+        _initiateExecutionLayerWithdrawal(pubkey, 0, maxFeeToPay);
+    }
+
+    /// @inheritdoc IWithdrawalVault
     function pause() external onlyRole(DEFAULT_ADMIN_ROLE) {
         _pause();
     }
@@ -218,19 +237,12 @@ contract WithdrawalVault is
             if (isFullExitWithdraw) {
                 assetsInGWei = 0;
                 _isFullyExited[pubkey] = true;
+            } else {
+                // Track the last partial withdrawal request block for a validator
+                lastPartialWithdrawalRequestBlock[pubkey] = block.number;
             }
 
-            uint256 feeToPay = _getWithdrawalRequestFee();
-            if (feeToPay > maxFeeToPay) {
-                revert OverpaidFee();
-            }
-
-            if (msg.value < feeToPay) {
-                revert InsufficientFee();
-            }
-
-            _triggerExecutionLayerWithdrawal(pubkey, assetsInGWei, feeToPay);
-            _refundOverpaidFee(feeToPay, msg.sender);
+            _initiateExecutionLayerWithdrawal(pubkey, assetsInGWei, maxFeeToPay);
         } else {
             // If the pool has fully exited or short circuit is triggered, refund the fee if any
             if (msg.value > 0) {
@@ -272,5 +284,25 @@ contract WithdrawalVault is
 
         emit WithdrawalRequestFinalized(requestId);
         delete withdrawalRequests[requestId];
+    }
+
+    function _initiateExecutionLayerWithdrawal(
+        bytes memory pubkey,
+        uint64 assetsInGWei,
+        uint256 maxFeeToPay
+    )
+        internal
+    {
+        uint256 feeToPay = _getWithdrawalRequestFee();
+        if (feeToPay > maxFeeToPay) {
+            revert OverpaidFee();
+        }
+
+        if (msg.value < feeToPay) {
+            revert InsufficientFee();
+        }
+
+        _triggerExecutionLayerWithdrawal(pubkey, assetsInGWei, feeToPay);
+        _refundOverpaidFee(feeToPay, msg.sender);
     }
 }

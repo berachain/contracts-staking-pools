@@ -636,4 +636,233 @@ contract WithdrawalVaultTest is Base {
         assertEq(request.sharesBurnt, shares);
         assertEq(withdrawalVault.allocatedWithdrawalsAmount(fixtureValidatorData.pubkey), expectedAssets);
     }
+
+    function test_retryFullExit_Success_NoPartialWithdrawal() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Trigger a full exit via a normal withdrawal first
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, true, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        // Now anyone can resubmit the full exit (no partial withdrawal happened, so no cooldown)
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Success_AfterCooldown() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // First, do a partial withdrawal to set lastPartialWithdrawalRequestBlock
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(50 ether, false, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 50 gwei, maxFeeToPay);
+
+        uint256 partialBlock = block.number;
+
+        // Then trigger a full exit
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, true, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        // Advance past the cooldown
+        vm.roll(partialBlock + withdrawalVault.WITHDRAWAL_FLIGHT_BLOCK_DELAY() + 1);
+
+        // Resubmit should succeed
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_NotFullyExited() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        vm.expectRevert(IWithdrawalVault.NotFullyExited.selector);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_PendingWithdrawalInFlight() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Do a partial withdrawal first
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(50 ether, false, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 50 gwei, maxFeeToPay);
+
+        // Then trigger a full exit
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, true, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        // Try resubmit immediately — should fail because cooldown hasn't passed
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        vm.expectRevert(IWithdrawalVault.PendingWithdrawalInFlight.selector);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_PendingWithdrawalInFlight_AtBoundary() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Do a partial withdrawal
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(50 ether, false, false)
+        );
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 50 gwei, maxFeeToPay);
+
+        uint256 partialBlock = block.number;
+
+        // Mark as fully exited via notifyFullExitFromCL
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        // Advance to exactly the boundary (should still fail, uses <=)
+        vm.roll(partialBlock + withdrawalVault.WITHDRAWAL_FLIGHT_BLOCK_DELAY());
+
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        vm.expectRevert(IWithdrawalVault.PendingWithdrawalInFlight.selector);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+
+        // Advance one more block — should succeed
+        vm.roll(partialBlock + withdrawalVault.WITHDRAWAL_FLIGHT_BLOCK_DELAY() + 1);
+
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_Paused() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mark as fully exited
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        // Pause the contract
+        withdrawalVault.pause();
+
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_InsufficientFee() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mark as fully exited
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        vm.prank(bob);
+        vm.expectRevert(IWithdrawalVault.InsufficientFee.selector);
+        withdrawalVault.retryFullExit{ value: 0 }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_retryFullExit_Fail_OverpaidFee() public {
+        mockEIP7002.setWithdrawalFee(10 ether);
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mark as fully exited
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        vm.expectRevert(IWithdrawalVault.OverpaidFee.selector);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 5 ether);
+    }
+
+    function test_retryFullExit_RefundsOverpaidFee() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mark as fully exited
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        uint256 overpay = maxFeeToPay + 10 ether;
+        vm.deal(bob, overpay);
+        vm.prank(bob);
+        withdrawalVault.retryFullExit{ value: overpay }(fixtureValidatorData.pubkey, overpay);
+
+        assertEq(address(bob).balance, overpay - maxFeeToPay);
+    }
+
+    function test_retryFullExit_MarkedViaNotifyFullExitFromCL() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        // Mark as fully exited via staking pool call (simulating CL-triggered exit)
+        vm.prank(address(_getStakingPool(fixtureValidatorData.pubkey)));
+        withdrawalVault.notifyFullExitFromCL(fixtureValidatorData.pubkey);
+
+        // Anyone can resubmit
+        vm.deal(bob, maxFeeToPay);
+        vm.prank(bob);
+        withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
+    }
+
+    function test_lastPartialWithdrawalRequestBlock_TrackedOnPartialWithdrawal() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(50 ether, false, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 50 gwei, maxFeeToPay);
+
+        assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), block.number);
+    }
+
+    function test_lastPartialWithdrawalRequestBlock_NotTrackedOnFullExit() public {
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(100 ether, true, false)
+        );
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
+
+        assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), 0);
+    }
 }

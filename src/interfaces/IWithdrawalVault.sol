@@ -40,6 +40,10 @@ interface IWithdrawalVault {
     error NotEnoughFunds();
     // Signature: 0x9cbe2357
     error NonTransferable();
+    // Signature: 0x0500c292
+    error NotFullyExited();
+    // Signature: 0x7984aa71
+    error PendingWithdrawalInFlight();
 
     // STRUCTS
 
@@ -117,6 +121,16 @@ interface IWithdrawalVault {
     /// @notice Notifies the withdrawal vault that a full exit was triggered from the CL.
     /// @param pubkey The validator's public key.
     function notifyFullExitFromCL(bytes memory pubkey) external;
+
+    /// @notice Re-submits a full exit request for a validator whose previous full exit was rejected by the CL.
+    /// @dev Permissionless. Can only be called if the validator is already marked as fully exited.
+    /// @dev Enforces a cooldown of WITHDRAWAL_FLIGHT_BLOCK_DELAY blocks since the last partial withdrawal
+    ///      to ensure any pending partial withdrawal has been processed by the CL before retrying.
+    /// @param pubkey The validator's public key.
+    /// @param maxFeeToPay The maximum fee the caller is willing to pay for the withdrawal (EIP-7002).
+    /// @custom:throws NotFullyExited if the validator is not marked as fully exited.
+    /// @custom:throws PendingWithdrawalInFlight if the cooldown period has not elapsed.
+    function retryFullExit(bytes memory pubkey, uint256 maxFeeToPay) external payable;
 
     /// @notice Gets a withdrawal request by ID
     /// @param requestId The ID of the withdrawal request
