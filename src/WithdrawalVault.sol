@@ -5,8 +5,9 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { ERC721EnumerableUpgradeable } from
-    "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
+import {
+    ERC721EnumerableUpgradeable
+} from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 import { ERC721Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC721/ERC721Upgradeable.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
@@ -79,15 +80,7 @@ contract WithdrawalVault is
     }
 
     /// @dev Make this non-transferable.
-    function transferFrom(
-        address from,
-        address to,
-        uint256 tokenId
-    )
-        public
-        pure
-        override(ERC721Upgradeable, IERC721)
-    {
+    function transferFrom(address from, address to, uint256 tokenId) public pure override(ERC721Upgradeable, IERC721) {
         from;
         to;
         tokenId;
@@ -197,11 +190,7 @@ contract WithdrawalVault is
         uint256 newRequestId = _nextRequestId++;
 
         WithdrawalRequest memory newRequest = WithdrawalRequest({
-            pubkey: pubkey,
-            assetsRequested: assets,
-            sharesBurnt: shares,
-            user: msg.sender,
-            requestBlock: block.number
+            pubkey: pubkey, assetsRequested: assets, sharesBurnt: shares, user: msg.sender, requestBlock: block.number
         });
 
         _mint(msg.sender, newRequestId);

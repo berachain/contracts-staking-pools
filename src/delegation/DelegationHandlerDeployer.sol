@@ -23,8 +23,9 @@ contract DelegationHandlerDeployer is Create2Deployer {
             deployWithCreate2(delegationHandlerSalt, type(DelegationHandler).creationCode);
 
         // Deploy delegation handler factory proxy implementation
-        address delegationHandlerFactoryImpl =
-            deployWithCreate2(delegationHandlerFactorySalt.implementation, type(DelegationHandlerFactory).creationCode);
+        address delegationHandlerFactoryImpl = deployWithCreate2(
+            delegationHandlerFactorySalt.implementation, type(DelegationHandlerFactory).creationCode
+        );
         // deploy delegation handler factory proxy
         delegationHandlerFactory = DelegationHandlerFactory(
             deployProxyWithCreate2(delegationHandlerFactoryImpl, delegationHandlerFactorySalt.proxy)

@@ -131,8 +131,9 @@ abstract contract Base is Test, Create2Deployer {
         bytes memory dummySignature = _create96Byte();
 
         bytes memory withdrawalCredentials = _withdrawalAddressToCredentials(address(withdrawalVault));
-        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) =
-        stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) = stakingPoolContractsFactory.deployStakingPoolContracts{
+            value: 10_000 ether
+        }(
             pubkey, withdrawalCredentials, dummySignature, address(this), address(this)
         );
 
@@ -155,7 +156,9 @@ abstract contract Base is Test, Create2Deployer {
     function _loadValidatorData() internal {
         // read in proof data
         fixtureValidatorData = abi.decode(
-            stdJson.parseRaw(vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_proofs.json")), "$"),
+            stdJson.parseRaw(
+                vm.readFile(string.concat(vm.projectRoot(), "/test/fixtures/validator_proofs.json")), "$"
+            ),
             (ValidatorData)
         );
     }

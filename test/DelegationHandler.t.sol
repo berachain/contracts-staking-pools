@@ -351,9 +351,8 @@ contract DelegationHandlerTest is Base {
         // Inflate share price
         vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), 100_000 ether);
 
-        uint256 redeemableAssets = _getStakingPool(fixtureValidatorData.pubkey).previewRedeem(
-            _getStakingPool(fixtureValidatorData.pubkey).balanceOf(address(delegationHandler))
-        );
+        uint256 redeemableAssets = _getStakingPool(fixtureValidatorData.pubkey)
+            .previewRedeem(_getStakingPool(fixtureValidatorData.pubkey).balanceOf(address(delegationHandler)));
         uint256 expectedBalance = redeemableAssets - delegationHandler.delegatedAmount();
 
         uint256 fee = 1 ether;

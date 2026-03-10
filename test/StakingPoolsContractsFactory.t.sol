@@ -90,8 +90,9 @@ contract StakingPoolsContractsFactoryTest is Base {
 
         StakingPoolContractsFactory.CoreContracts memory coreContracts =
             stakingPoolContractsFactory.predictStakingPoolContractsAddresses(pubkey);
-        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) =
-        stakingPoolContractsFactory.deployStakingPoolContracts{ value: 10_000 ether }(
+        (address smartOperator, address stakingPool, address stakingRewardsVault, address incentiveCollector) = stakingPoolContractsFactory.deployStakingPoolContracts{
+            value: 10_000 ether
+        }(
             pubkey, withdrawalCredentials, _create96Byte(), address(this), address(this)
         );
 
@@ -228,9 +229,10 @@ contract StakingPoolsContractsFactoryTest is Base {
 
     function _getBeaconImpl(BeaconType beacon) internal view returns (address) {
         if (beacon == BeaconType.SmartOperator) {
-            return _getBeaconImplementationAddressFromERC1967Proxy(
-                address(_getSmartOperator(fixtureValidatorData.pubkey))
-            );
+            return
+                _getBeaconImplementationAddressFromERC1967Proxy(
+                    address(_getSmartOperator(fixtureValidatorData.pubkey))
+                );
         } else if (beacon == BeaconType.StakingPool) {
             return
                 _getBeaconImplementationAddressFromERC1967Proxy(address(_getStakingPool(fixtureValidatorData.pubkey)));

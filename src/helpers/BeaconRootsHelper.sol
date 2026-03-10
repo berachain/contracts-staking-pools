@@ -130,11 +130,9 @@ abstract contract BeaconRootsHelper {
         uint256 gIndex =
             zeroValidatorWithdrawalCredentialsGIndex + (VALIDATOR_WITHDRAWAL_CREDENTIALS_OFFSET * validatorIndex);
 
-        if (
-            !SSZ.verifyProof(
+        if (!SSZ.verifyProof(
                 withdrawalCredentialsProof, beaconBlockRoot, bytes32(validatorWithdrawalCredentials), gIndex
-            )
-        ) {
+            )) {
             revert InvalidProof();
         }
     }

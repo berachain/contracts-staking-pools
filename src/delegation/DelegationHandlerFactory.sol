@@ -47,9 +47,8 @@ contract DelegationHandlerFactory is IDelegationHandlerFactory, Ownable2StepUpgr
 
         bytes32 salt = _getSalt(pubkey);
         address delegationHandler = LibClone.deployDeterministicERC1967BeaconProxy(beacon, salt);
-        DelegationHandler(payable(delegationHandler)).initialize(
-            owner(), pubkey, stakingPoolContractsFactory, withdrawalVault
-        );
+        DelegationHandler(payable(delegationHandler))
+            .initialize(owner(), pubkey, stakingPoolContractsFactory, withdrawalVault);
 
         delegationHandlers[pubkey] = delegationHandler;
         emit DelegationHandlerDeployed(pubkey, delegationHandler);

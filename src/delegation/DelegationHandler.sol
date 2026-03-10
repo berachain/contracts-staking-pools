@@ -120,7 +120,9 @@ contract DelegationHandler is IDelegationHandler, AccessControlUpgradeable, Paus
 
         (address smartOperator, address stakingPool_,,) = _factory.deployStakingPoolContracts{
             value: FIRST_DEPOSIT_AMOUNT
-        }(_pubkey, withdrawalCredentials, signature, msg.sender, address(this));
+        }(
+            _pubkey, withdrawalCredentials, signature, msg.sender, address(this)
+        );
 
         _smartOperator = ISmartOperator(smartOperator);
         stakingPool = stakingPool_;

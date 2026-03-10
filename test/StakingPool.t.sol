@@ -116,7 +116,7 @@ contract StakingPoolTest is Base {
 
         userDepositAmount =
             bound(userDepositAmount, 1, (stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
-            // avoid deposit
+        // avoid deposit
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
 
         _helper_submit(alice, userDepositAmount);
@@ -133,7 +133,7 @@ contract StakingPoolTest is Base {
 
         userDepositAmount =
             bound(userDepositAmount, 1, (stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1)); // bound to
-            // avoid deposit
+        // avoid deposit
         uint256 expectedUserShares = stakingPool.convertToShares(userDepositAmount);
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), 0);
 
@@ -169,7 +169,7 @@ contract StakingPoolTest is Base {
 
         assertTrue(stakingPool.activeThresholdReached());
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(alice)), aliceDepositAmount); // alice is not affected
-            // by the first deposit
+        // by the first deposit
         assertEq(stakingPool.balanceOf(bob), userDepositAmount);
         assertEq(stakingPool.previewRedeem(stakingPool.balanceOf(bob)), userDepositAmount);
         assertEq(stakingPool.bufferedAssets(), expectedBufferedAssets);
@@ -323,7 +323,7 @@ contract StakingPoolTest is Base {
         public
     {
         submittedAmount = bound(submittedAmount, 1, stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT - 1); // bound
-            // to avoid deposit
+        // to avoid deposit
         withdrawalAmount = bound(withdrawalAmount, 1, submittedAmount); // bound to avoid withdrawal
         testFuzz_submit(submittedAmount);
 

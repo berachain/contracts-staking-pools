@@ -332,14 +332,12 @@ contract StakingPoolContractsFactory is
             LibClone.deployDeterministicERC1967BeaconProxy(_beaconIncentiveCollector, salt);
 
         SmartOperator(payable(coreContracts.smartOperator)).initialize(owner(), pubkey, validatorAdmin, address(this));
-        StakingPool(payable(coreContracts.stakingPool)).initialize(
-            owner(), pubkey, defaultSharesRecipient, address(this)
-        );
+        StakingPool(payable(coreContracts.stakingPool))
+            .initialize(owner(), pubkey, defaultSharesRecipient, address(this));
 
         StakingRewardsVault(payable(coreContracts.stakingRewardsVault)).initialize(owner(), coreContracts.stakingPool);
-        IncentiveCollector(payable(coreContracts.incentiveCollector)).initialize(
-            owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey
-        );
+        IncentiveCollector(payable(coreContracts.incentiveCollector))
+            .initialize(owner(), INITIAL_PAYOUT_AMOUNT, address(this), pubkey);
 
         return coreContracts;
     }
