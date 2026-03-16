@@ -653,6 +653,8 @@ contract WithdrawalVaultTest is Base {
         // Now anyone can resubmit the full exit (no partial withdrawal happened, so no cooldown)
         vm.deal(bob, maxFeeToPay);
         vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.FullExitRequestRetried(fixtureValidatorData.pubkey);
         withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
     }
 
@@ -687,6 +689,8 @@ contract WithdrawalVaultTest is Base {
         // Resubmit should succeed
         vm.deal(bob, maxFeeToPay);
         vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.FullExitRequestRetried(fixtureValidatorData.pubkey);
         withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
     }
 
@@ -761,6 +765,8 @@ contract WithdrawalVaultTest is Base {
 
         vm.deal(bob, maxFeeToPay);
         vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.FullExitRequestRetried(fixtureValidatorData.pubkey);
         withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
     }
 
@@ -816,6 +822,8 @@ contract WithdrawalVaultTest is Base {
         uint256 overpay = maxFeeToPay + 10 ether;
         vm.deal(bob, overpay);
         vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.FullExitRequestRetried(fixtureValidatorData.pubkey);
         withdrawalVault.retryFullExit{ value: overpay }(fixtureValidatorData.pubkey, overpay);
 
         assertEq(address(bob).balance, overpay - maxFeeToPay);
@@ -831,6 +839,8 @@ contract WithdrawalVaultTest is Base {
         // Anyone can resubmit
         vm.deal(bob, maxFeeToPay);
         vm.prank(bob);
+        vm.expectEmit(true, true, true, true);
+        emit IWithdrawalVault.FullExitRequestRetried(fixtureValidatorData.pubkey);
         withdrawalVault.retryFullExit{ value: maxFeeToPay }(fixtureValidatorData.pubkey, maxFeeToPay);
     }
 

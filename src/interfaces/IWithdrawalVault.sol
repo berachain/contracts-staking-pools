@@ -24,6 +24,10 @@ interface IWithdrawalVault {
     /// @param requestId The ID of the withdrawal request that was finalized.
     event WithdrawalRequestFinalized(uint256 requestId);
 
+    /// @notice Emitted when a full exit request is retried.
+    /// @param pubkey The public key of the validator that the full exit request was retried for.
+    event FullExitRequestRetried(bytes pubkey);
+
     // ERRORS
 
     // Signature: 0xddb5de5e

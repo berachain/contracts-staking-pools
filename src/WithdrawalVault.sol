@@ -166,6 +166,8 @@ contract WithdrawalVault is
         }
 
         _initiateExecutionLayerWithdrawal(pubkey, 0, maxFeeToPay);
+
+        emit FullExitRequestRetried(pubkey);
     }
 
     /// @inheritdoc IWithdrawalVault
