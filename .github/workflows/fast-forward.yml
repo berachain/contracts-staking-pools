@@ -4,7 +4,6 @@
 # - PRs targeting 'bepolia' must come from 'devel' branch
 # - PRs targeting 'main' must come from 'bepolia' branch
 # The workflow uses sequoia-pgp/fast-forward action to merge changes automatically.
-
 name: execute-fast-forward
 on:
   pull_request_review:
@@ -15,25 +14,25 @@ on:
 jobs:
   execute-fast-forward:
     runs-on: ubuntu-latest
-
     if:
       ${{ contains(github.event.pull_request.labels.*.name, 'fast-forward') && github.event.review.state == 'approved'
       }}
-
     permissions:
       contents: write
       pull-requests: write
       issues: write
-
     steps:
       - name: Validate branches
+        env:
+          GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}
+          GITHUB_HEAD_REF: ${{ github.event.pull_request.head.ref }}
         run: |
-          echo "GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}"
-          echo "GITHUB_HEAD_REF: ${{ github.event.pull_request.head.ref }}"
-          if [ ${{ github.event.pull_request.base.ref }} == "bepolia" ] && [ ${{ github.event.pull_request.head.ref }} != "devel" ]; then
+          echo "GITHUB_BASE_REF: $GITHUB_BASE_REF"
+          echo "GITHUB_HEAD_REF: $GITHUB_HEAD_REF"
+          if [ "$GITHUB_BASE_REF" == "bepolia" ] && [ "$GITHUB_HEAD_REF" != "devel" ]; then
             echo "Error: When targeting bepolia branch, head branch must be devel"
             exit 1
-          elif [ ${{ github.event.pull_request.base.ref }} == "main" ] && [ ${{ github.event.pull_request.head.ref }} != "bepolia" ]; then
+          elif [ "$GITHUB_BASE_REF" == "main" ] && [ "$GITHUB_HEAD_REF" != "bepolia" ]; then
             echo "Error: When targeting main branch, head branch must be bepolia"
             exit 1
           fi
