@@ -11,6 +11,7 @@ import { SmartOperator } from "src/core/SmartOperator.sol";
 import { ELWithdrawHelper } from "src/helpers/ELWithdrawHelper.sol";
 import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { console2 } from "forge-std/console2.sol";
+import { Vm } from "forge-std/Vm.sol";
 import { IStBera } from "src/interfaces/IStBera.sol";
 
 contract WithdrawalVaultTest is Base {
@@ -212,6 +213,59 @@ contract WithdrawalVaultTest is Base {
         vm.prank(alice);
         vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
         withdrawalVault.requestWithdrawal{ value: 1 ether }(fixtureValidatorData.pubkey, 100 gwei, 1 ether);
+    }
+
+    /// @notice A sub-gwei WBERA balance on the SmartOperator must not cause the partial-withdrawal
+    /// path to emit a `(pubkey, amount = 0)` EIP-7002 request. An `amount = 0` request is interpreted
+    /// by the consensus layer as a full validator exit (EIP-7002), while the StakingPool only
+    /// decremented `totalDeposits` by the dust portion — desyncing pool accounting from CL state.
+    function test_requestWithdrawal_SubGweiOperatorCover_DoesNotTriggerFullExit() public {
+        // Choose `assetsInGWei` (uint64, in gwei) and an operator WBERA balance so that
+        //   amountInWei - operatorBalance ∈ (0, 1 gwei)
+        // i.e. the leftover lives in the sub-gwei range that gets truncated to 0 on line 253.
+        // 2 gwei requested vs 1.5 gwei operator cover → remainingFromCL = 0.5 gwei → remainingGwei = 0.
+        uint64 withdrawAmountGwei = 2; // 2 gwei = 2e9 wei
+        uint256 amountInWei = uint256(withdrawAmountGwei) * 1 gwei;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        address operator = address(_getSmartOperator(fixtureValidatorData.pubkey));
+        uint256 cover = 1.5 gwei; // 1.5e9 wei → forces sub-gwei dust into remainingFromCL
+        mockWBERA.mint(operator, cover);
+        // Back the WBERA contract with native BERA so SmartOperator.pullBeraToWithdrawalVault's
+        // WBERA.withdraw() succeeds when the buggy path goes through it.
+        vm.deal(address(mockWBERA), cover);
+
+        // Make the pool treat this as a normal partial withdrawal (not full-exit, not short-circuit).
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(amountInWei, false, false)
+        );
+
+        // After a correct fix, the cover is floored to a gwei boundary. With dust = 0.5 gwei, that
+        // floors to 0 — so pulledFromOperator = 0, no operator pull, and the CL request is the full
+        // 1 gwei. The bug-affected code instead emits amount = 0 (full exit).
+        vm.deal(alice, maxFeeToPay);
+        vm.recordLogs();
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(
+            fixtureValidatorData.pubkey, withdrawAmountGwei, maxFeeToPay
+        );
+
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        bytes32 elTopic = keccak256("ELWithdrawalTriggered(bytes,uint64,uint256)");
+        bool found;
+        uint64 elAmount;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics[0] == elTopic) {
+                found = true;
+                (, elAmount,) = abi.decode(logs[i].data, (bytes, uint64, uint256));
+                break;
+            }
+        }
+        assertTrue(found, "ELWithdrawalTriggered not emitted");
+        // The CL request amount must NOT be 0 — that would be a full-exit per EIP-7002.
+        assertGt(elAmount, 0, "sub-gwei dust truncated to amount=0 (full-exit) request");
     }
 
     function test_finalizeWithdrawalRequest() public {
@@ -874,5 +928,108 @@ contract WithdrawalVaultTest is Base {
         withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(fixtureValidatorData.pubkey, 100 gwei, maxFeeToPay);
 
         assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), 0);
+    }
+
+    // ── WBERA partial short-circuit tests
+    // ────────────────────────────────────
+
+    function test_requestWithdrawal_WBERAFullShortCircuit() public {
+        // Operator has enough WBERA to fully cover the withdrawal — no CL request needed.
+        uint256 withdrawAmountGwei = 100; // 100 gwei
+        uint256 withdrawAmountWei = uint256(withdrawAmountGwei) * 1 gwei;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        address smartOperator = stakingPoolContractsFactory.getCoreContracts(fixtureValidatorData.pubkey).smartOperator;
+
+        // Give operator WBERA and fund MockWBERA with matching native BERA
+        mockWBERA.mint(smartOperator, withdrawAmountWei);
+        vm.deal(address(mockWBERA), withdrawAmountWei);
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(withdrawAmountWei, false, false)
+        );
+
+        uint256 vaultBalanceBefore = address(withdrawalVault).balance;
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(
+            fixtureValidatorData.pubkey, uint64(withdrawAmountGwei), maxFeeToPay
+        );
+
+        // WBERA fully covered — vault received BERA, fee refunded to alice, no CL withdrawal
+        assertEq(address(withdrawalVault).balance, vaultBalanceBefore + withdrawAmountWei);
+        assertEq(mockWBERA.balanceOf(smartOperator), 0);
+        // Alice gets the fee back (no CL withdrawal needed)
+        assertEq(address(alice).balance, maxFeeToPay);
+        // No CL partial withdrawal block tracked (fee was not consumed)
+        assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), 0);
+    }
+
+    function test_requestWithdrawal_WBERAPartialShortCircuit() public {
+        // Operator has WBERA for half the amount — CL request for remainder.
+        uint256 withdrawAmountGwei = 100; // 100 gwei = 100e9 wei
+        uint256 withdrawAmountWei = uint256(withdrawAmountGwei) * 1 gwei;
+        uint256 operatorWBERA = withdrawAmountWei / 2; // 50 gwei
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        address smartOperator = stakingPoolContractsFactory.getCoreContracts(fixtureValidatorData.pubkey).smartOperator;
+
+        mockWBERA.mint(smartOperator, operatorWBERA);
+        vm.deal(address(mockWBERA), operatorWBERA);
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(withdrawAmountWei, false, false)
+        );
+
+        uint256 vaultBalanceBefore = address(withdrawalVault).balance;
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(
+            fixtureValidatorData.pubkey, uint64(withdrawAmountGwei), maxFeeToPay
+        );
+
+        // Operator's WBERA transferred to vault
+        assertEq(address(withdrawalVault).balance, vaultBalanceBefore + operatorWBERA);
+        assertEq(mockWBERA.balanceOf(smartOperator), 0);
+        // CL withdrawal was initiated for the remainder (fee consumed)
+        assertEq(address(alice).balance, 0);
+        // Partial withdrawal block IS tracked (CL withdrawal was initiated)
+        assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), block.number);
+    }
+
+    function test_requestWithdrawal_NoWBERA_NormalFlow() public {
+        // Operator has no WBERA — normal CL withdrawal flow unchanged.
+        uint256 withdrawAmountGwei = 100;
+        uint256 withdrawAmountWei = uint256(withdrawAmountGwei) * 1 gwei;
+        uint256 maxFeeToPay = _helper_getWithdrawalFee();
+
+        address smartOperator = stakingPoolContractsFactory.getCoreContracts(fixtureValidatorData.pubkey).smartOperator;
+        assertEq(mockWBERA.balanceOf(smartOperator), 0);
+
+        vm.mockCall(
+            address(_getStakingPool(fixtureValidatorData.pubkey)),
+            abi.encodeWithSelector(StakingPool.notifyWithdrawalRequest.selector),
+            abi.encode(withdrawAmountWei, false, false)
+        );
+
+        uint256 vaultBalanceBefore = address(withdrawalVault).balance;
+
+        vm.deal(alice, maxFeeToPay);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: maxFeeToPay }(
+            fixtureValidatorData.pubkey, uint64(withdrawAmountGwei), maxFeeToPay
+        );
+
+        // No WBERA transferred, vault balance unchanged from operator
+        assertEq(address(withdrawalVault).balance, vaultBalanceBefore);
+        // CL withdrawal initiated, fee consumed
+        assertEq(address(alice).balance, 0);
+        assertEq(withdrawalVault.lastPartialWithdrawalRequestBlock(fixtureValidatorData.pubkey), block.number);
     }
 }

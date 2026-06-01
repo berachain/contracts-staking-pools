@@ -218,9 +218,33 @@ contract WithdrawalVault is
         uint256 amountInWei = uint256(assetsInGWei) * 1 gwei;
 
         ICoreContractsStorage.CoreContracts memory coreContracts = _factory.getCoreContracts(pubkey);
+
+        // Pre-compute how much of this withdrawal can be sourced from operator WBERA so the pool
+        // can decrement totalDeposits only by the actual CL-bound portion. The pool ignores this
+        // hint when it resolves into a short-circuit or full-exit branch.
+        uint256 pulledFromOperator = 0;
+        if (!_isFullyExited[pubkey]) {
+            uint256 operatorBalance = ISmartOperator(coreContracts.smartOperator).availableWBERABalance();
+            uint256 cap = operatorBalance >= amountInWei ? amountInWei : operatorBalance;
+            // Quantize to gwei: amountInWei is a gwei multiple, but operatorBalance has wei
+            // precision. Flooring here keeps `amountInWei - pulledFromOperator` on a gwei boundary,
+            // so the EL request amount can never silently truncate to 0 (which the consensus layer
+            // would interpret as a full-exit per EIP-7002).
+            pulledFromOperator = (cap / 1 gwei) * 1 gwei;
+        }
+
         // Notify staking pool of withdrawal request and get shares amount
-        (uint256 shares, bool isFullExitWithdraw, bool isShortCircuit) =
-            IStakingPool(coreContracts.stakingPool).notifyWithdrawalRequest(msg.sender, amountInWei);
+        (uint256 shares, bool isFullExitWithdraw, bool isShortCircuit) = IStakingPool(coreContracts.stakingPool)
+            .notifyWithdrawalRequest(msg.sender, amountInWei, pulledFromOperator);
+
+        // The pool only applied the WBERA cover in the normal partial-withdrawal branch.
+        if (pulledFromOperator > 0 && !isShortCircuit && !isFullExitWithdraw) {
+            ISmartOperator(coreContracts.smartOperator).pullBeraToWithdrawalVault(pulledFromOperator);
+        } else {
+            pulledFromOperator = 0;
+        }
+
+        uint256 remainingFromCL = amountInWei - pulledFromOperator;
 
         // Only trigger withdrawals if pool hasn't fully exited and short circuit is not triggered
         if (!_isFullyExited[pubkey] && !isShortCircuit) {
@@ -228,12 +252,21 @@ contract WithdrawalVault is
             if (isFullExitWithdraw) {
                 assetsInGWei = 0;
                 _isFullyExited[pubkey] = true;
-            } else {
-                // Track the last partial withdrawal request block for a validator
+                _initiateExecutionLayerWithdrawal(pubkey, assetsInGWei, maxFeeToPay);
+            } else if (remainingFromCL > 0) {
+                // Partial short circuit: only request the uncovered portion from CL.
+                uint64 remainingGwei = uint64(remainingFromCL / 1 gwei);
+                if (remainingGwei == 0) {
+                    revert InvalidAmount();
+                }
                 lastPartialWithdrawalRequestBlock[pubkey] = block.number;
+                _initiateExecutionLayerWithdrawal(pubkey, remainingGwei, maxFeeToPay);
+            } else {
+                // Fully covered by WBERA — no CL withdrawal needed, refund fee
+                if (msg.value > 0) {
+                    SafeTransferLib.safeTransferETH(msg.sender, msg.value);
+                }
             }
-
-            _initiateExecutionLayerWithdrawal(pubkey, assetsInGWei, maxFeeToPay);
         } else {
             // If the pool has fully exited or short circuit is triggered, refund the fee if any
             if (msg.value > 0) {

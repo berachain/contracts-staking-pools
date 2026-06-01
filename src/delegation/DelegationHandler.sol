@@ -78,9 +78,12 @@ contract DelegationHandler is IDelegationHandler, AccessControlUpgradeable, Paus
 
     /// @inheritdoc IDelegationHandler
     function undelegate() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // check if funds are available. Allow 1 wei of difference due to rounding errors.
-        uint256 availableFunds = delegatedAmountAvailable - delegatedFundsPendingWithdrawal;
-        if (delegatedAmount - availableFunds > 1) {
+        // Compare in gwei units: delegatedAmountAvailable can carry sub-gwei dust because
+        // depositDelegatedFunds subtracts (amount - refund) from StakingPool, where refund
+        // inherits sub-gwei buffered rewards/WBERA. Flooring absorbs that drift; the
+        // remaining 1-gwei tolerance covers the floor rounding itself.
+        uint256 availableFunds = delegatedAmountAvailable / 1 gwei - delegatedFundsPendingWithdrawal / 1 gwei;
+        if (delegatedAmount / 1 gwei - availableFunds > 1) {
             revert FundsNotAvailable();
         }
 
@@ -161,17 +164,19 @@ contract DelegationHandler is IDelegationHandler, AccessControlUpgradeable, Paus
 
         uint256 balanceBefore = address(this).balance - msg.value;
 
-        uint256 delegatedAmountUsed = delegatedAmount - delegatedAmountAvailable;
-        uint64 delegatedAmountUsedInGWei = uint64(delegatedAmountUsed / 1 gwei);
+        // EIP-7002 only returns whole gwei. Floor to gwei so accounting matches the actually
+        // withdrawn amount; the sub-gwei dust stays "in use" and can be withdrawn on a later call.
+        uint64 delegatedAmountUsedInGWei = uint64((delegatedAmount - delegatedAmountAvailable) / 1 gwei);
+        uint256 delegatedAmountUsed = uint256(delegatedAmountUsedInGWei) * 1 gwei;
         _withdrawalVault.requestWithdrawal{ value: msg.value }(pubkey, delegatedAmountUsedInGWei, msg.value);
+
+        delegatedFundsPendingWithdrawal = delegatedAmountUsed;
+        delegatedAmountAvailable += delegatedAmountUsed;
 
         uint256 refund = address(this).balance - balanceBefore;
         if (refund > 0) {
             SafeTransferLib.safeTransferETH(msg.sender, refund);
         }
-
-        delegatedFundsPendingWithdrawal = delegatedAmountUsed;
-        delegatedAmountAvailable += delegatedAmountUsed;
 
         emit DelegatedFundsWithdrawalRequested(delegatedAmountUsed);
     }
@@ -197,12 +202,12 @@ contract DelegationHandler is IDelegationHandler, AccessControlUpgradeable, Paus
         uint256 requestId = _withdrawalVault.requestRedeem{ value: msg.value }(pubkey, redeemableShares, msg.value);
         IWithdrawalVault.WithdrawalRequest memory request = _withdrawalVault.getWithdrawalRequest(requestId);
 
+        isYieldRedeemRequest[requestId] = true;
+
         uint256 refund = address(this).balance - balanceBefore;
         if (refund > 0) {
             SafeTransferLib.safeTransferETH(msg.sender, refund);
         }
-
-        isYieldRedeemRequest[requestId] = true;
 
         emit YieldRedeemRequested(requestId, request.sharesBurnt);
     }

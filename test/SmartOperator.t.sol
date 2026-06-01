@@ -337,6 +337,8 @@ contract SmartOperatorTest is Base {
     }
 
     function test_queueBoost() public {
+        smartOperator.grantRole(smartOperator.BGT_MANAGER_ROLE(), address(this));
+
         // Mint some BGT to smart operator
         mockBGT.mint(address(smartOperator), 100 ether);
 
@@ -478,6 +480,7 @@ contract SmartOperatorTest is Base {
         smartOperator.grantRole(bgtManagerRole, bgtManager);
 
         mockBGT.mint(address(smartOperator), 100 ether);
+        vm.prank(bgtManager);
         smartOperator.queueBoost();
         (, uint128 queuedBoost) = mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
         smartOperator.activateBoost();
@@ -485,6 +488,7 @@ contract SmartOperatorTest is Base {
         mockBGT.mint(address(smartOperator), 100 ether);
         vm.prank(bgtManager);
         smartOperator.queueDropBoost(50 ether);
+        vm.prank(bgtManager);
         smartOperator.queueBoost();
 
         (, queuedBoost) = mockBGT.boostedQueue(address(smartOperator), fixtureValidatorData.pubkey);
@@ -499,6 +503,140 @@ contract SmartOperatorTest is Base {
         (, queuedDropBoost) = mockBGT.dropBoostQueue(address(smartOperator), fixtureValidatorData.pubkey);
         assertEq(queuedBoost, 0);
         assertEq(queuedDropBoost, 100 ether); // full exit queue drop boost
+    }
+
+    function test_accrueEarnedWBERAFees() public {
+        _helper_activateStakingPool(10_000 ether);
+
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        mockWBERA.mint(address(smartOperator), 100 ether);
+
+        smartOperator.accrueEarnedWBERAFees();
+
+        uint256 expectedShares = stakingPool.previewDeposit(10 ether); // 10% of 100 ether
+        assertEq(stakingPool.balanceOf(address(this)), 10_000 ether + expectedShares);
+
+        (, uint256 wberaBalanceAlreadyCharged,,) = smartOperator.getEarnedWBERAFeeState();
+        assertEq(wberaBalanceAlreadyCharged, 100 ether);
+    }
+
+    function test_accrueEarnedWBERAFees_NoFees() public {
+        mockWBERA.mint(address(smartOperator), 100 ether);
+
+        smartOperator.accrueEarnedWBERAFees();
+
+        assertEq(stakingPool.balanceOf(address(this)), 0);
+
+        (, uint256 wberaBalanceAlreadyCharged,,) = smartOperator.getEarnedWBERAFeeState();
+        assertEq(wberaBalanceAlreadyCharged, 100 ether);
+    }
+
+    function test_rebaseableWberaAmount_NoFee() public view {
+        assertEq(smartOperator.rebaseableWberaAmount(), 0);
+    }
+
+    function test_rebaseableWberaAmount_WithFee() public {
+        test_grantRole_ProtocolFeeManagerRole();
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        mockWBERA.mint(address(smartOperator), 100 ether);
+
+        // rebaseableWberaAmount = 100 - 10% = 90 ether
+        assertEq(smartOperator.rebaseableWberaAmount(), 90 ether);
+    }
+
+    function test_withdrawRewards() public {
+        mockWBERA.mint(address(smartOperator), 100 ether);
+        // Fund MockWBERA with BERA so it can pay out on withdraw
+        vm.deal(address(mockWBERA), 100 ether);
+
+        uint256 poolBalanceBefore = address(stakingPool).balance;
+
+        vm.expectEmit(true, true, true, true, address(smartOperator));
+        emit ISmartOperator.WBERADepositedToPool(100 ether);
+        vm.prank(address(stakingPool));
+        smartOperator.withdrawRewards(100 ether);
+
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+        assertEq(address(stakingPool).balance, poolBalanceBefore + 100 ether);
+    }
+
+    function test_withdrawRewards_Fail_NotStakingPool() public {
+        mockWBERA.mint(address(smartOperator), 100 ether);
+        vm.deal(address(mockWBERA), 100 ether);
+
+        address notPool = makeAddr("notPool");
+        vm.prank(notPool);
+        vm.expectRevert(abi.encodeWithSelector(ISmartOperator.InvalidSender.selector, notPool, address(stakingPool)));
+        smartOperator.withdrawRewards(100 ether);
+    }
+
+    function test_pullBeraToWithdrawalVault() public {
+        mockWBERA.mint(address(smartOperator), 50 ether);
+        vm.deal(address(mockWBERA), 50 ether);
+
+        uint256 vaultBalanceBefore = address(withdrawalVault).balance;
+
+        vm.prank(address(withdrawalVault));
+        vm.expectEmit(true, true, true, true);
+        emit ISmartOperator.WBERASentToWithdrawalVault(50 ether);
+        smartOperator.pullBeraToWithdrawalVault(50 ether);
+
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+        assertEq(address(withdrawalVault).balance, vaultBalanceBefore + 50 ether);
+    }
+
+    function test_pullBeraToWithdrawalVault_Fail_NotWithdrawalVault() public {
+        address notVault = makeAddr("notVault");
+        vm.prank(notVault);
+        vm.expectRevert(
+            abi.encodeWithSelector(ISmartOperator.InvalidSender.selector, notVault, address(withdrawalVault))
+        );
+        smartOperator.pullBeraToWithdrawalVault(1 ether);
+    }
+
+    function test_fullExitQueueDropBoost_SkipsBGTLogicWhenNoBGT() public {
+        // With no BGT balance, fullExitQueueDropBoost should skip all BGT logic
+        // and only call _updateEarnedWBERAFees
+        assertEq(mockBGT.balanceOf(address(smartOperator)), 0);
+
+        vm.prank(address(stakingPool));
+        smartOperator.fullExitQueueDropBoost();
+
+        // No BGT boost operations should have happened
+        (, uint128 queuedDropBoost) = mockBGT.dropBoostQueue(address(smartOperator), fixtureValidatorData.pubkey);
+        assertEq(queuedDropBoost, 0);
+    }
+
+    function test_moveERC20ToIncentiveCollector_SkipsWBERA() public {
+        address incentiveCollector = address(_getIncentiveCollector(fixtureValidatorData.pubkey));
+
+        MockERC20 randomToken = new MockERC20("Random", "RND");
+        randomToken.mint(address(smartOperator), 5 ether);
+        mockHoney.mint(address(smartOperator), 7 ether);
+        mockWBERA.mint(address(smartOperator), 11 ether);
+
+        address[] memory tokens = new address[](3);
+        tokens[0] = address(randomToken);
+        tokens[1] = address(mockHoney);
+        tokens[2] = address(mockWBERA);
+
+        smartOperator.moveERC20ToIncentiveCollector(tokens);
+
+        // Non-WBERA tokens are forwarded to the incentive collector for auction.
+        assertEq(randomToken.balanceOf(address(smartOperator)), 0);
+        assertEq(randomToken.balanceOf(incentiveCollector), 5 ether);
+        assertEq(mockHoney.balanceOf(address(smartOperator)), 0);
+        assertEq(mockHoney.balanceOf(incentiveCollector), 7 ether);
+
+        // WBERA must remain on the operator: it is the pool's underlying asset.
+        // Forwarding it would drain pool reserves and underflow rebaseableWberaAmount().
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 11 ether);
+        assertEq(mockWBERA.balanceOf(incentiveCollector), 0);
     }
 
     function _helper_activateStakingPool(uint256 initialDepositAmount) internal {

@@ -138,56 +138,81 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
 
     /// @inheritdoc IStakingPool
     function receiveRewards() external payable {
-        _validateSender(_stakingRewardsVault);
+        if (msg.sender != _stakingRewardsVault && msg.sender != _smartOperator) {
+            revert UnauthorizedRewardsSender(msg.sender);
+        }
         emit StakingRewardsReceived(msg.value);
     }
 
     /// @inheritdoc IStakingPool
-    function notifyWithdrawalRequest(address user, uint256 assets) external returns (uint256, bool, bool) {
+    function notifyWithdrawalRequest(
+        address user,
+        uint256 assets,
+        uint256 coveredByOperator
+    )
+        external
+        returns (uint256, bool, bool)
+    {
         _validateSender(_withdrawalVault);
+
+        // Accrue protocol fees on chargeable BGT/WBERA BEFORE the user's shares are burned,
+        // so mintFeeShares prices off the pre-burn totalSupply. Burning first would deflate
+        // supply while totalAssets still includes the not-yet-paid-out withdrawal, causing
+        // fee shares to be under-minted (shortfall accruing to remaining holders).
+        // Skipped once isFullyExited (no further yield accrues post-exit).
+        if (!isFullyExited) {
+            ISmartOperator(_smartOperator).accrueEarnedBGTFees();
+            ISmartOperator(_smartOperator).accrueEarnedWBERAFees();
+        }
 
         // Calculate and burn shares
         uint256 amountOfSharesToBurn = previewWithdraw(assets);
         _burnShares(user, amountOfSharesToBurn);
 
-        // If the pool has not reached the activation threshold and the default shares recipient has insufficient
-        // balance,
-        // prevent withdrawal.
-        bool isDefaultRecipient = user == _defaultSharesRecipient;
-        bool hasInsufficientDefaultBalance = isDefaultRecipient && balanceOf(user) < totalDeposits;
-        if (!activeThresholdReached && hasInsufficientDefaultBalance) {
+        // Once fully exited, BERA is already in the WithdrawalVault and neither the pre-threshold
+        // default-recipient gate nor the post-threshold cooldown serves a purpose.
+        if (isFullyExited) {
+            _frozenTotalAssets -= assets;
+            return (amountOfSharesToBurn, true, false);
+        }
+
+        // Pre-threshold: service from the buffer or refuse. There is no CL stake yet, so we must
+        // never fall through into the post-threshold full-exit logic below.
+        if (!activeThresholdReached) {
+            bool isDefaultRecipient = user == _defaultSharesRecipient;
+            bool hasInsufficientDefaultBalance = isDefaultRecipient && balanceOf(user) < totalDeposits;
+            if (hasInsufficientDefaultBalance) {
+                revert WithdrawalNotAllowed();
+            }
+
+            if (bufferedAssets >= assets) {
+                SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
+                bufferedAssets -= assets;
+                return (amountOfSharesToBurn, false, true);
+            }
+
             revert WithdrawalNotAllowed();
         }
 
-        // If the pool has not reached the activation threshold and the buffered assets are sufficient,
-        // enable short circuit withdrawal and transfer the assets to the withdrawal vault.
-        if (!activeThresholdReached && bufferedAssets >= assets) {
-            SafeTransferLib.safeTransferETH(_withdrawalVault, assets);
-            bufferedAssets -= assets;
-            return (amountOfSharesToBurn, isFullyExited, true);
-        }
-
-        // If the pool has reached the activation threshold and the withdrawal cooldown period has not elapsed,
-        // prevent withdrawal.
+        // Post-threshold: enforce the cooldown window measured from validator activation.
         if (block.number < _validatorActivationBlock + ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS) {
             revert WithdrawalNotAllowed();
         }
 
-        if (!isFullyExited) {
-            // Check if withdrawal amount exceeds total deposits or would leave insufficient balance,
-            // which can happen as share values appreciate from accumulated rewards.
-            if (assets > totalDeposits || (totalDeposits - assets) < minEffectiveBalance()) {
-                _triggerFullExit();
-                _frozenTotalAssets -= assets;
-                totalDeposits = 0;
-            } else {
-                totalDeposits -= assets;
-            }
-        } else {
+        // The CL-bound outflow excludes the operator-covered portion. Decrement totalDeposits and
+        // evaluate the full-exit threshold against this CL portion only — a withdrawal fully covered
+        // by operator WBERA never breaches the minimum effective balance.
+        uint256 clPortion = assets - coveredByOperator;
+
+        if (clPortion > totalDeposits || (clPortion > 0 && (totalDeposits - clPortion) < minEffectiveBalance())) {
+            _triggerFullExit();
             _frozenTotalAssets -= assets;
+            totalDeposits = 0;
+            return (amountOfSharesToBurn, true, false);
         }
 
-        return (amountOfSharesToBurn, isFullyExited, false);
+        totalDeposits -= clPortion;
+        return (amountOfSharesToBurn, false, false);
     }
 
     /// @inheritdoc IStakingPool
@@ -229,11 +254,9 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
 
     /// @inheritdoc IStakingPool
     function processRewards() external whenNotPaused {
-        (uint256 updatedBufferedAssets,,, uint256 rewardsToCollect) = _computeDepositAmounts(0);
+        (uint256 updatedBufferedAssets,,, uint256 rewardsToCollect, uint256 wberaToCollect) = _computeDepositAmounts(0);
 
-        if (rewardsToCollect > 0) {
-            _collectRewards(rewardsToCollect);
-        }
+        _collectRewards(rewardsToCollect, wberaToCollect);
 
         bufferedAssets = updatedBufferedAssets;
 
@@ -247,16 +270,29 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
             revert InvalidAmount();
         }
 
-        (uint256 updatedBufferedAssets, uint256 userDepositAmount, uint256 refundAmount, uint256 rewardsToCollect) =
-            _computeDepositAmounts(msg.value);
+        (
+            uint256 updatedBufferedAssets,
+            uint256 userDepositAmount,
+            uint256 refundAmount,
+            uint256 rewardsToCollect,
+            uint256 wberaToCollect
+        ) = _computeDepositAmounts(msg.value);
 
+        // Price the user's shares against the pre-deposit state, then collect rewards before
+        // minting them. _collectRewards may trigger mintFeeShares (protocol fee on WBERA/BGT);
+        // running it while totalSupply still excludes the user's shares prevents fee shares
+        // from being inflated by the user's not-yet-booked deposit. Asset/fee math is
+        // preserved: the fee asset enters the pool atomically with the fee share mint, so
+        // both the precomputed user share count and the fee share count remain priced at the
+        // same pre-deposit ratio.
         if (userDepositAmount > 0) {
             shares = previewDeposit(userDepositAmount);
-            _mintShares(receiver, shares);
         }
 
-        if (rewardsToCollect > 0) {
-            _collectRewards(rewardsToCollect);
+        _collectRewards(rewardsToCollect, wberaToCollect);
+
+        if (userDepositAmount > 0) {
+            _mintShares(receiver, shares);
         }
 
         bufferedAssets = updatedBufferedAssets;
@@ -321,6 +357,7 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
     /// @return effectiveUserDeposit How much of the user's deposit will actually be accepted.
     /// @return refundAmount The amount to send back to the user if the deposit is too large.
     /// @return rewardsToCollect The amount of reward to collect alongside the deposit.
+    /// @return wberaToCollect The amount of WBERA to collect alongside the deposit.
     function _computeDepositAmounts(uint256 userDepositAmount)
         internal
         view
@@ -328,11 +365,13 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
             uint256 updatedBufferedAssets,
             uint256 effectiveUserDeposit,
             uint256 refundAmount,
-            uint256 rewardsToCollect
+            uint256 rewardsToCollect,
+            uint256 wberaToCollect
         )
     {
         uint256 rewardsBalance = address(_stakingRewardsVault).balance;
-        uint256 totalBufferedAssets = userDepositAmount + rewardsBalance + bufferedAssets;
+        uint256 wberaBalance = ISmartOperator(_smartOperator).availableWBERABalance();
+        uint256 totalBufferedAssets = userDepositAmount + rewardsBalance + wberaBalance + bufferedAssets;
         uint256 maxDepositableAmount = MAX_EFFECTIVE_BALANCE - totalDeposits;
 
         // Cap total deposit at max depositable amount
@@ -347,7 +386,14 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
             refundAmount = userDepositAmount - additionalDeposit;
         } else {
             effectiveUserDeposit = userDepositAmount;
-            rewardsToCollect = additionalDeposit - userDepositAmount;
+            uint256 remaining = additionalDeposit - userDepositAmount;
+            // Drain staking rewards vault first, then pull from WBERA in the smart operator
+            if (remaining <= rewardsBalance) {
+                rewardsToCollect = remaining;
+            } else {
+                rewardsToCollect = rewardsBalance;
+                wberaToCollect = remaining - rewardsBalance;
+            }
         }
     }
 
@@ -355,19 +401,27 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
     /// - total deposits sent to consensus layer
     /// - assets currently buffered in this contract
     /// - staking rewards held in the associated vault
-    /// - BGT tokens held by the smart operator
+    /// - BGT tokens held by the smart operator (transition: removed once BGT balance reaches 0)
+    /// - WBERA tokens held by the smart operator
     function _getTotalAssets() internal view virtual override returns (uint256) {
         if (isFullyExited) {
             return _frozenTotalAssets;
         }
 
         return totalDeposits + bufferedAssets + address(_stakingRewardsVault).balance
-            + ISmartOperator(_smartOperator).rebaseableBgtAmount();
+            + ISmartOperator(_smartOperator).rebaseableBgtAmount()
+            + ISmartOperator(_smartOperator).rebaseableWberaAmount();
     }
 
-    /// @dev Collects the given amount of staking rewards from the associated vault.
-    function _collectRewards(uint256 rewardsToCollect) internal {
-        IStakingRewardsVault(_stakingRewardsVault).withdrawRewards(rewardsToCollect);
+    /// @dev Pulls external yield into the pool: BERA from the staking rewards vault and
+    /// unwrapped WBERA from the smart operator. No-op for sources whose amount is zero.
+    function _collectRewards(uint256 rewardsToCollect, uint256 wberaToCollect) internal {
+        if (wberaToCollect > 0) {
+            ISmartOperator(_smartOperator).withdrawRewards(wberaToCollect);
+        }
+        if (rewardsToCollect > 0) {
+            IStakingRewardsVault(_stakingRewardsVault).withdrawRewards(rewardsToCollect);
+        }
     }
 
     /// @dev Processes a deposit to the consensus layer if conditions allow
@@ -404,19 +458,14 @@ contract StakingPool is IStakingPool, StBERA, PausableUpgradeable, Ownable2StepU
         // Freeze total assets at current value after the drop boost is queued and base rate fees are updated.
         _frozenTotalAssets = _getTotalAssets();
 
-        // Transfer all remaining native balance to the withdrawal vault.
-        // Note: We use address(this).balance rather than bufferedAssets since bufferedAssets
-        // was already decremented earlier in the withdrawal flow. This ensures we don't miss any native token.
+        // Pull staking rewards and any idle WBERA in the smart operator into the pool,
+        // then forward the full native balance (existing buffer + collected yield) to the
+        // withdrawal vault in a single transfer.
+        _collectRewards(address(_stakingRewardsVault).balance, ISmartOperator(_smartOperator).availableWBERABalance());
+
         if (address(this).balance > 0) {
             SafeTransferLib.safeTransferETH(_withdrawalVault, address(this).balance);
             bufferedAssets = 0;
-        }
-
-        // Transfer staking rewards to the withdrawal vault
-        if (address(_stakingRewardsVault).balance > 0) {
-            uint256 rewardsToWithdraw = address(_stakingRewardsVault).balance;
-            _collectRewards(rewardsToWithdraw);
-            SafeTransferLib.safeTransferETH(_withdrawalVault, rewardsToWithdraw);
         }
 
         isFullyExited = true;

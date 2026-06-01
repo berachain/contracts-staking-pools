@@ -21,6 +21,8 @@ interface ISmartOperator {
     event ProtocolFeePercentageSet(uint96 protocolFeePercentage);
     event BGTRedeemed(address receiver, uint256 amount);
     event RewardAllocatorSet(address rewardAllocator);
+    event WBERADepositedToPool(uint256 amount);
+    event WBERASentToWithdrawalVault(uint256 amount);
 
     // FUNCTIONS
 
@@ -31,20 +33,22 @@ interface ISmartOperator {
 
     /// @notice This function is used to auto-boost the validator key for the current unboosted amount of BGT.
     /// @dev Only enqueues boost if not already queued to avoid spamming the queue.
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
     /// @return True if the boost was successfully queued.
     function queueBoost() external returns (bool);
 
     /// @notice Simple relayer to BGT.activateBoost() function for this operator.
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
     function activateBoost() external;
 
     /// @notice Enqueues a drop boost request for a given amount.
     /// @dev Can only be called by the BGT_MANAGER_ROLE.
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
     /// @param amount The amount of BGT to unboost.
     function queueDropBoost(uint128 amount) external;
 
     /// @notice Enqueues a drop boost request for the whole boosted amount.
     /// @dev Can only be called by the staking pool when making a full withdraw.
-    /// @dev Also pauses the contract.
     function fullExitQueueDropBoost() external;
 
     /// @notice Executes the drop boost for this operator.
@@ -57,7 +61,6 @@ interface ISmartOperator {
     function redeemBGT(uint256 amount) external;
 
     /// @notice Redeems all BGT tokens owned by this contract for BERA.
-    /// @dev The protocol fee is deducted from the amount.
     /// @dev Can only be called by associated WithdrawalVault contract when in need of BERA.
     /// @param receiver The address to send the BERA to.
     function fullExitRedeemBGT(address receiver) external;
@@ -92,9 +95,13 @@ interface ISmartOperator {
     /// @return The current protocol fee percentage.
     function protocolFeePercentage() external view returns (uint96);
 
-    /// @notice Accrues the base rate fees.
+    /// @notice Accrues the BGT base rate fees.
     /// @dev Fees are accrued only on balance not yet charged.
     function accrueEarnedBGTFees() external;
+
+    /// @notice Accrues the WBERA base rate fees.
+    /// @dev Fees are accrued only on balance not yet charged.
+    function accrueEarnedWBERAFees() external;
 
     /// @notice Accrues the protocol fee for a given amount (payout amount).
     /// @dev Can only be called by the incentive collector.
@@ -102,12 +109,27 @@ interface ISmartOperator {
     function accrueIncentivesFees(uint256 amount) external;
 
     /// @notice Claims BGTStaker rewards and send them to the incentive collector.
+    /// @dev @deprecated BGT staking rewards are deprecated. Function retained for transition only.
     function claimBgtStakerReward() external returns (uint256);
 
     /// @notice Claims BGTStaker and incentive program rewards and send them to the incentive collector.
+    /// @dev @deprecated BGT boost incentives are deprecated. Function retained for transition only.
     /// @param claims The claims for the incentive program rewards.
     /// @param tokens The tokens to be sent to the incentive collector.
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external;
+
+    /// @notice Moves the given tokens to the incentive collector.
+    /// @param tokens The tokens to be moved to the incentive collector.
+    function moveERC20ToIncentiveCollector(address[] memory tokens) external;
+
+    /// @notice Withdraws the given amount of WBERA to BERA and deposits it to the staking pool.
+    /// @param amount The amount of WBERA to deposit.
+    function withdrawRewards(uint256 amount) external;
+
+    /// @notice Unwraps the given amount of WBERA to BERA and sends it to the WithdrawalVault.
+    /// @dev Can only be called by the WithdrawalVault.
+    /// @param amount The amount of WBERA to unwrap and send.
+    function pullBeraToWithdrawalVault(uint256 amount) external;
 
     // VIEWS
 
@@ -116,7 +138,15 @@ interface ISmartOperator {
     /// @return The amount of BGT available for rebasing.
     function rebaseableBgtAmount() external view returns (uint256);
 
-    /// @notice Returns the current base rate fee state information.
+    /// @notice Returns WBERA balance of the smart operator minus the protocol fee.
+    /// @dev This function is used to calculate the rebased value of staking pool's shares.
+    /// @return The amount of WBERA available for rebasing.
+    function rebaseableWberaAmount() external view returns (uint256);
+
+    /// @notice Returns the current WBERA balance held by the smart operator.
+    function availableWBERABalance() external view returns (uint256);
+
+    /// @notice Returns the current BGT base rate fee state information.
     /// @dev Useful for monitoring and debugging fee calculations.
     /// @return currentBalance The current BGT balance of the smart operator
     /// @return bgtBalanceAlreadyCharged The amount of BGT that has already been charged fees
@@ -128,6 +158,22 @@ interface ISmartOperator {
         returns (
             uint256 currentBalance,
             uint256 bgtBalanceAlreadyCharged,
+            uint256 chargeableBalance,
+            uint96 protocolFeePercentage
+        );
+
+    /// @notice Returns the current WBERA base rate fee state information.
+    /// @dev Useful for monitoring and debugging fee calculations.
+    /// @return currentBalance The current WBERA balance of the smart operator
+    /// @return wberaBalanceAlreadyCharged The amount of WBERA that has already been charged fees
+    /// @return chargeableBalance The amount of WBERA that can still be charged fees
+    /// @return protocolFeePercentage The current protocol fee percentage
+    function getEarnedWBERAFeeState()
+        external
+        view
+        returns (
+            uint256 currentBalance,
+            uint256 wberaBalanceAlreadyCharged,
             uint256 chargeableBalance,
             uint96 protocolFeePercentage
         );

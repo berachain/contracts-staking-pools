@@ -8,6 +8,7 @@ import { WithdrawalVault } from "src/WithdrawalVault.sol";
 import { PausableUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/PausableUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
+import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
 
 contract StakingPoolTest is Base {
     uint256 constant INITIAL_DEPOSIT_AMOUNT = 10_000 ether;
@@ -17,6 +18,7 @@ contract StakingPoolTest is Base {
 
     StakingPool stakingPool;
     SmartOperator smartOperator;
+    StakingRewardsVault stakingRewardsVault;
 
     function setUp() public override {
         super.setUp();
@@ -24,6 +26,7 @@ contract StakingPoolTest is Base {
 
         stakingPool = _getStakingPool(fixtureValidatorData.pubkey);
         smartOperator = _getSmartOperator(fixtureValidatorData.pubkey);
+        stakingRewardsVault = _getStakingRewardsVault(fixtureValidatorData.pubkey);
 
         smartOperator.grantRole(smartOperator.PROTOCOL_FEE_MANAGER_ROLE(), validatorFeeManager);
     }
@@ -93,22 +96,29 @@ contract StakingPoolTest is Base {
         stakingPool.activate(10_000 ether);
     }
 
-    function testFuzz_receiveRewards(uint256 amount) public {
-        address stakingRewardsVault = address(_getStakingRewardsVault(fixtureValidatorData.pubkey));
-
-        vm.deal(stakingRewardsVault, amount);
-        vm.prank(stakingRewardsVault);
+    function test_receiveRewards_fromStakingRewardsVault() public {
+        uint256 amount = 1 ether;
+        vm.deal(address(stakingRewardsVault), amount);
+        vm.prank(address(stakingRewardsVault));
         vm.expectEmit(true, true, true, true);
         emit IStakingPool.StakingRewardsReceived(amount);
         stakingPool.receiveRewards{ value: amount }();
     }
 
-    function test_receiveRewards_Fail_NotStakingRewardsVault() public {
-        address stakingRewardsVault = address(_getStakingRewardsVault(fixtureValidatorData.pubkey));
-        vm.expectRevert(
-            abi.encodeWithSelector(IStakingPool.InvalidSender.selector, address(this), stakingRewardsVault)
-        );
-        stakingPool.receiveRewards{ value: 10_000 ether }();
+    function test_receiveRewards_fromSmartOperator() public {
+        uint256 amount = 1 ether;
+        vm.deal(address(smartOperator), amount);
+        vm.prank(address(smartOperator));
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingRewardsReceived(amount);
+        stakingPool.receiveRewards{ value: amount }();
+    }
+
+    function test_receiveRewards_revertUnauthorizedSender() public {
+        uint256 amount = 10_000 ether;
+        vm.deal(address(this), amount);
+        vm.expectRevert(abi.encodeWithSelector(IStakingPool.UnauthorizedRewardsSender.selector, address(this)));
+        stakingPool.receiveRewards{ value: amount }();
     }
 
     function testFuzz_submit(uint256 userDepositAmount) public returns (uint256, uint256, uint256) {
@@ -286,6 +296,186 @@ contract StakingPoolTest is Base {
         assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 5000 ether);
     }
 
+    function test_processRewards_OnlyWBERA() public {
+        test_activate();
+        uint256 wberaAmount = 5000 ether;
+
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        vm.expectEmit(true, true, true, true);
+        emit IStakingPool.StakingRewardsReceived(wberaAmount);
+        stakingPool.processRewards();
+
+        assertEq(stakingPool.bufferedAssets(), wberaAmount);
+        assertEq(address(stakingPool).balance, wberaAmount);
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+    }
+
+    function test_processRewards_BeraAndWBERA() public {
+        test_activate();
+        uint256 rewardsAmount = 3000 ether;
+        uint256 wberaAmount = 4000 ether;
+
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        stakingPool.processRewards();
+
+        assertEq(stakingPool.bufferedAssets(), rewardsAmount + wberaAmount);
+        assertEq(address(stakingPool).balance, rewardsAmount + wberaAmount);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+    }
+
+    function test_submit_PullsBeraAndWBERA() public {
+        test_activate();
+        uint256 rewardsAmount = 1000 ether;
+        uint256 wberaAmount = 2000 ether;
+        uint256 userDepositAmount = 500 ether;
+
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        _helper_submit(alice, userDepositAmount);
+
+        assertEq(stakingPool.bufferedAssets(), rewardsAmount + wberaAmount + userDepositAmount);
+        assertEq(address(stakingPool).balance, rewardsAmount + wberaAmount + userDepositAmount);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+    }
+
+    function test_submit_FeeSharesNotInflatedByConcurrentDeposit() public {
+        // mintFeeShares (triggered during _collectRewards inside _submit) must price fee
+        // shares against the pre-deposit totalSupply. If user shares were minted first, the
+        // fee mint would see an inflated supply with unchanged totalAssets, minting more fee
+        // shares than fair and diluting depositors.
+        test_activate();
+
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        uint256 wberaAmount = 100 ether;
+        uint256 userDepositAmount = 1000 ether;
+
+        uint256 snap = vm.snapshotState();
+
+        // Scenario A: fee accrues first via processRewards, then user deposits.
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+        stakingPool.processRewards();
+        _helper_submit(alice, userDepositAmount);
+
+        uint256 feeShareValueA =
+            stakingPool.convertToAssets(stakingPool.balanceOf(address(this)) - INITIAL_DEPOSIT_AMOUNT);
+
+        vm.revertToState(snap);
+
+        // Scenario B: fee accrues inside _submit, same user deposit.
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+        _helper_submit(alice, userDepositAmount);
+
+        uint256 feeShareValueB =
+            stakingPool.convertToAssets(stakingPool.balanceOf(address(this)) - INITIAL_DEPOSIT_AMOUNT);
+
+        assertApproxEqAbs(feeShareValueB, feeShareValueA, 1);
+    }
+
+    function test_withdraw_FeeSharesNotDeflatedByConcurrentBurn() public {
+        // notifyWithdrawalRequest burns the user's shares before pullBeraToWithdrawalVault
+        // triggers mintFeeShares on WBERA. If totalSupply is reduced by the burn while
+        // totalAssets still reflects the not-yet-paid-out withdrawal, fee shares are priced
+        // off an inflated A/S ratio and the default recipient is under-minted, with the
+        // shortfall accruing to remaining holders.
+        test_activate();
+
+        vm.prank(validatorFeeManager);
+        smartOperator.setProtocolFeePercentage(1000); // 10%
+
+        // Reach activation and clear cooldown so notifyWithdrawalRequest takes the partial path.
+        uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
+        _helper_submit(alice, aliceDepositAmount);
+        vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+
+        uint256 wberaAmount = 100 ether;
+        uint256 withdrawalAmount = 50 ether;
+
+        uint256 snap = vm.snapshotState();
+
+        // Scenario A: accrue fees first, then withdraw.
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+        smartOperator.accrueEarnedWBERAFees();
+
+        vm.prank(address(withdrawalVault));
+        stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount, withdrawalAmount);
+        vm.prank(address(withdrawalVault));
+        smartOperator.pullBeraToWithdrawalVault(withdrawalAmount);
+
+        uint256 feeShareValueA =
+            stakingPool.convertToAssets(stakingPool.balanceOf(address(this)) - INITIAL_DEPOSIT_AMOUNT);
+
+        vm.revertToState(snap);
+
+        // Scenario B: fees accrue inside the withdrawal path.
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        vm.prank(address(withdrawalVault));
+        stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount, withdrawalAmount);
+        vm.prank(address(withdrawalVault));
+        smartOperator.pullBeraToWithdrawalVault(withdrawalAmount);
+
+        uint256 feeShareValueB =
+            stakingPool.convertToAssets(stakingPool.balanceOf(address(this)) - INITIAL_DEPOSIT_AMOUNT);
+
+        assertApproxEqAbs(feeShareValueB, feeShareValueA, 1);
+    }
+
+    function test_submit_OnlyWBERAAvailable() public {
+        test_activate();
+        uint256 wberaAmount = 2000 ether;
+        uint256 userDepositAmount = 500 ether;
+
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        _helper_submit(alice, userDepositAmount);
+
+        assertEq(stakingPool.bufferedAssets(), wberaAmount + userDepositAmount);
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, 0);
+    }
+
+    function test_submit_WBERANotPulledWhenCapReached() public {
+        test_activate();
+        // Fill up to MAX_EFFECTIVE_BALANCE leaving only 10_000 ether of capacity.
+        _helper_submit(alice, stakingPool.MAX_EFFECTIVE_BALANCE() - INITIAL_DEPOSIT_AMOUNT - 10_000 ether);
+
+        // Fund both sources with more than the remaining capacity.
+        uint256 rewardsAmount = 8000 ether;
+        uint256 wberaAmount = 8000 ether;
+        vm.deal(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)), rewardsAmount);
+        mockWBERA.mint(address(smartOperator), wberaAmount);
+        vm.deal(address(mockWBERA), wberaAmount);
+
+        // User deposit of 5000 ether: 5000 from user, 5000 from rewards vault drains it,
+        // and the remaining 0 ether of capacity means no WBERA is pulled.
+        _helper_submit(bob, 5000 ether);
+
+        // After the deposit the buffer is fully consumed by the CL deposit and totalDeposits == MAX.
+        assertEq(stakingPool.totalDeposits(), stakingPool.MAX_EFFECTIVE_BALANCE());
+        assertEq(stakingPool.bufferedAssets(), 0);
+        // Rewards vault is preferred first: 5000 of its 8000 was pulled, 3000 remains.
+        assertEq(address(_getStakingRewardsVault(fixtureValidatorData.pubkey)).balance, rewardsAmount - 5000 ether);
+        // WBERA is untouched since the rewards vault alone covered the remaining capacity.
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), wberaAmount);
+    }
+
     function test_processRewards_Fail_Paused() public {
         assertEq(stakingPool.paused(), true);
         vm.expectRevert(PausableUpgradeable.EnforcedPause.selector);
@@ -337,7 +527,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
-            stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
+            stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount, 0);
 
         assertTrue(isShortCircuit);
         assertApproxEqAbs(amountOfSharesToBurn, withdrawalAmount, 2);
@@ -351,7 +541,7 @@ contract StakingPoolTest is Base {
         vm.expectRevert(
             abi.encodeWithSelector(IStakingPool.InvalidSender.selector, address(this), address(withdrawalVault))
         );
-        stakingPool.notifyWithdrawalRequest(alice, 1 ether);
+        stakingPool.notifyWithdrawalRequest(alice, 1 ether, 0);
     }
 
     function test_notifyWithdrawalRequest_Fail_WithdrawalNotAllowed() public {
@@ -361,7 +551,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
-        stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount);
+        stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount, 0);
     }
 
     function test_notifyWithdrawalRequest_FullExit() public {
@@ -376,7 +566,7 @@ contract StakingPoolTest is Base {
         // Withdraw enough to trigger full exit
         vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
-            stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount);
+            stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount, 0);
 
         assertFalse(isShortCircuit);
         assertEq(amountOfSharesToBurn, aliceDepositAmount);
@@ -385,13 +575,57 @@ contract StakingPoolTest is Base {
         assertTrue(stakingPool.paused());
     }
 
+    function test_notifyWithdrawalRequest_FullyExited_BypassesCooldown() public {
+        test_activate();
+
+        // Deposit enough to reach the activation threshold (sets _validatorActivationBlock).
+        uint256 aliceDepositAmount = stakingPool.minEffectiveBalance() - INITIAL_DEPOSIT_AMOUNT;
+        _helper_submit(alice, aliceDepositAmount);
+        assertTrue(stakingPool.activeThresholdReached());
+
+        // Oracle reports zero CL balance → triggers full exit while still within the cooldown window.
+        vm.prank(address(accountingOracle));
+        stakingPool.updateTotalDeposits(0);
+        assertTrue(stakingPool.isFullyExited());
+
+        // Redemption against a fully-exited pool must succeed even though cooldown has not elapsed.
+        vm.prank(address(withdrawalVault));
+        (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
+            stakingPool.notifyWithdrawalRequest(alice, aliceDepositAmount, 0);
+
+        assertEq(amountOfSharesToBurn, aliceDepositAmount);
+        assertTrue(isFullyExited);
+        assertFalse(isShortCircuit);
+    }
+
+    function test_notifyWithdrawalRequest_FullyExited_PreThreshold_DefaultRecipient() public {
+        test_activate();
+
+        // Oracle reports zero CL balance before the activation threshold is reached.
+        // This triggers a full exit while activeThresholdReached is still false and leaves
+        // totalDeposits at the seed amount.
+        vm.prank(address(accountingOracle));
+        stakingPool.updateTotalDeposits(0);
+        assertTrue(stakingPool.isFullyExited());
+        assertFalse(stakingPool.activeThresholdReached());
+
+        // The default shares recipient (factory) must be able to redeem its activation stake.
+        vm.prank(address(withdrawalVault));
+        (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
+            stakingPool.notifyWithdrawalRequest(address(this), INITIAL_DEPOSIT_AMOUNT, 0);
+
+        assertEq(amountOfSharesToBurn, INITIAL_DEPOSIT_AMOUNT);
+        assertTrue(isFullyExited);
+        assertFalse(isShortCircuit);
+    }
+
     function test_notifyWithdrawalRequest_DefaultSharesRecipient_Fail() public {
         test_activate();
         uint256 withdrawAmount = INITIAL_DEPOSIT_AMOUNT / 2;
 
         vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
-        stakingPool.notifyWithdrawalRequest(address(this), withdrawAmount);
+        stakingPool.notifyWithdrawalRequest(address(this), withdrawAmount, 0);
     }
 
     function test_notifyWithdrawalRequest_DefaultSharesRecipient() public {
@@ -405,7 +639,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
-            stakingPool.notifyWithdrawalRequest(address(this), submitAmount);
+            stakingPool.notifyWithdrawalRequest(address(this), submitAmount, 0);
 
         assertTrue(isShortCircuit);
         assertEq(amountOfSharesToBurn, submitAmount);
@@ -421,7 +655,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
-        stakingPool.notifyWithdrawalRequest(address(this), submitAmount + 1);
+        stakingPool.notifyWithdrawalRequest(address(this), submitAmount + 1, 0);
     }
 
     function test_notifyWithdrawalRequest_DefaultSharesRecipient_AfterActivationThreshold() public {
@@ -442,7 +676,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) = stakingPool.notifyWithdrawalRequest(
-            address(this), defaultSharesRecipientSubmitAmount + INITIAL_DEPOSIT_AMOUNT
+            address(this), defaultSharesRecipientSubmitAmount + INITIAL_DEPOSIT_AMOUNT, 0
         );
 
         assertTrue(stakingPool.activeThresholdReached());
@@ -463,13 +697,13 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
-        stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
+        stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount, 0);
 
         vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
 
         vm.prank(address(withdrawalVault));
         (uint256 amountOfSharesToBurn, bool isFullyExited, bool isShortCircuit) =
-            stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount);
+            stakingPool.notifyWithdrawalRequest(bob, bobDepositAmount, 0);
 
         assertFalse(isShortCircuit);
         assertEq(amountOfSharesToBurn, bobDepositAmount);
@@ -494,7 +728,7 @@ contract StakingPoolTest is Base {
         vm.prank(address(withdrawalVault));
         vm.expectEmit(true, true, true, true);
         emit IStakingPool.FullExitTriggered();
-        stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount);
+        stakingPool.notifyWithdrawalRequest(alice, withdrawalAmount, 0);
     }
 
     function test_totalAssets(uint256 userDepositAmount, uint128 donationAmount) public {
@@ -709,7 +943,7 @@ contract StakingPoolTest is Base {
 
         vm.prank(address(withdrawalVault));
         vm.expectRevert(IStakingPool.WithdrawalNotAllowed.selector);
-        stakingPool.notifyWithdrawalRequest(address(this), donationAmount);
+        stakingPool.notifyWithdrawalRequest(address(this), donationAmount, 0);
     }
 
     function test_Wrong_FrozenTotalAssets() public {
@@ -733,5 +967,57 @@ contract StakingPoolTest is Base {
         assertEq(stakingPool.totalDeposits(), 0);
         assertEq(stakingPool.bufferedAssets(), 0);
         assertEq(stakingPool.totalAssets(), previousTotalAssets - 9_500_000 ether);
+    }
+
+    /// @notice A partial withdrawal that gets covered partly by operator WBERA must not
+    ///         cause totalAssets to drop by more than the requested amount. The pool decrements
+    ///         totalDeposits only by the CL-bound portion (`assets - coveredByOperator`); the
+    ///         operator-covered portion shows up purely as a drop in rebaseableWberaAmount.
+    function test_WBERACoveredWithdrawal_DoesNotUnderreportTotalAssets() public {
+        // 1) Activate and bring totalDeposits well above min so a partial withdraw
+        //    does not trigger a full exit.
+        test_activate();
+        uint256 aliceDepositAmount = 1_000_000 ether;
+        _helper_submit(alice, aliceDepositAmount);
+        // After submit, the buffer is deposited to CL, leaving only sub-gwei dust.
+        assertGt(stakingPool.totalDeposits(), stakingPool.minEffectiveBalance());
+
+        // 2) Mint WBERA to the operator AFTER the submit, so it stays in the
+        //    operator (no further deposit pulls it: buffer < MIN_CL_DEPOSIT_AMOUNT).
+        uint256 withdrawAmountGwei = 100; // 100 gwei
+        uint256 withdrawAmountWei = withdrawAmountGwei * 1 gwei;
+        uint256 operatorWBERA = withdrawAmountWei / 2; // operator covers half
+        mockWBERA.mint(address(smartOperator), operatorWBERA);
+        vm.deal(address(mockWBERA), operatorWBERA); // fund native for unwrap
+
+        // 3) Roll past withdrawal cooldown.
+        vm.roll(block.number + stakingPool.ENABLE_WITHDRAWAL_COOLDOWN_BLOCKS() + 1);
+
+        // 4) Snapshot totalAssets before the withdrawal.
+        uint256 totalAssetsBefore = stakingPool.totalAssets();
+        uint256 totalDepositsBefore = stakingPool.totalDeposits();
+
+        // 5) Alice requests a partial withdrawal through the real WithdrawalVault.
+        (bool ok, bytes memory data) = address(mockEIP7002).staticcall("");
+        require(ok, "fee");
+        uint256 fee = abi.decode(data, (uint256));
+        vm.deal(alice, fee);
+        vm.prank(alice);
+        withdrawalVault.requestWithdrawal{ value: fee }(fixtureValidatorData.pubkey, uint64(withdrawAmountGwei), fee);
+
+        // 6) Sanity: half the withdrawal was covered by operator WBERA.
+        assertEq(mockWBERA.balanceOf(address(smartOperator)), 0);
+
+        // 7) totalDeposits must only drop by the CL-bound portion (assets - operatorWBERA).
+        assertEq(stakingPool.totalDeposits(), totalDepositsBefore - (withdrawAmountWei - operatorWBERA));
+
+        // 8) totalAssets must drop by EXACTLY withdrawAmountWei (the user's claim
+        //    allocated to the pending request) — not by withdrawAmountWei + operatorWBERA.
+        uint256 totalAssetsAfter = stakingPool.totalAssets();
+        assertEq(
+            totalAssetsBefore - totalAssetsAfter,
+            withdrawAmountWei,
+            "totalAssets must drop by exactly the requested withdraw amount"
+        );
     }
 }

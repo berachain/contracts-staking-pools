@@ -18,6 +18,7 @@ import { MockBeraChef } from "test/mock/MockBeraChef.sol";
 import { MockHoney } from "test/mock/MockHoney.sol";
 import { MockBGT } from "test/mock/MockBGT.sol";
 import { MockBGTStaker } from "test/mock/MockBGTStaker.sol";
+import { MockWBERA } from "test/mock/MockWBERA.sol";
 import { MockEIP7002 } from "test/mock/MockEIP7002.sol";
 import { Deployer } from "src/Deployer.sol";
 import { Create2Deployer } from "src/base/Create2Deployer.sol";
@@ -30,6 +31,7 @@ abstract contract Base is Test, Create2Deployer {
     address public constant BGT = 0x656b95E550C07a9ffe548bd4085c72418Ceb1dba;
     address public constant BGT_STAKER = 0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6;
     address public constant HONEY_TOKEN = 0xFCBD14DC51f0A4d49d5E53C2E0950e0bC26d0Dce;
+    address public constant WBERA = 0x6969696969696969696969696969696969696969;
 
     Salt internal ACCOUNTING_ORACLE_SALT = Salt({ implementation: 0, proxy: 0 });
     Salt internal WITHDRAWAL_VAULT_SALT = Salt({ implementation: 0, proxy: 0 });
@@ -64,6 +66,7 @@ abstract contract Base is Test, Create2Deployer {
     MockHoney mockHoney;
     MockBGT mockBGT;
     MockBGTStaker mockBGTStaker;
+    MockWBERA mockWBERA;
 
     ValidatorData fixtureValidatorData;
 
@@ -124,6 +127,9 @@ abstract contract Base is Test, Create2Deployer {
 
         vm.etch(BGT_STAKER, address(new MockBGTStaker()).code);
         mockBGTStaker = MockBGTStaker(BGT_STAKER);
+
+        vm.etch(WBERA, address(new MockWBERA()).code);
+        mockWBERA = MockWBERA(payable(WBERA));
     }
 
     function _deployStakingPoolContracts(bytes memory pubkey) internal {

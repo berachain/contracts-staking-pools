@@ -33,6 +33,8 @@ interface IStakingPool {
     error WithdrawalNotAllowed();
     // Signature: 0x0ec2e9b9
     error InvalidMinEffectiveBalance();
+    // Signature: 0x21ca7aea
+    error UnauthorizedRewardsSender(address sender);
 
     // GETTERS
 
@@ -54,7 +56,6 @@ interface IStakingPool {
     function activate(uint256 initialDepositAmount) external;
 
     /// @notice A payable function for execution layer rewards.
-    /// @dev Can only be called by the `StakingRewardsVault`.
     /// @dev A dedicated function is needed because the receive() function is treated as a user deposit.
     function receiveRewards() external payable;
 
@@ -70,6 +71,10 @@ interface IStakingPool {
     /// If the pool has reached the activation threshold, withdrawals are frozen for the cooldown period.
     /// @param user The address of the user requesting withdrawal.
     /// @param assets The amount of BERA to withdraw.
+    /// @param coveredByOperator Amount of `assets` that the withdrawal vault will source by
+    ///        unwrapping operator WBERA. The pool decrements `totalDeposits` only by the
+    ///        remainder (`assets - coveredByOperator`) so its accounting reflects the actual
+    ///        CL outflow. Ignored when the call resolves into a short-circuit or full-exit.
     /// @return sharesToBurn The amount of shares that were burned.
     /// @return isFullyExited Whether the pool has fully exited.
     /// @return isShortCircuit Whether the withdrawal request is short-circuited.
@@ -78,7 +83,8 @@ interface IStakingPool {
     /// @custom:throws ETHTransferFailed if transfer to withdrawal vault fails.
     function notifyWithdrawalRequest(
         address user,
-        uint256 assets
+        uint256 assets,
+        uint256 coveredByOperator
     )
         external
         returns (uint256 sharesToBurn, bool isFullyExited, bool isShortCircuit);

@@ -3,6 +3,7 @@ pragma solidity ^0.8.30;
 
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { IERC20, SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { SafeTransferLib } from "@solady/src/utils/SafeTransferLib.sol";
 import { IBGT } from "@pol/interfaces/IBGT.sol";
 import { IBeraChef } from "@pol/interfaces/IBeraChef.sol";
 import { IBGTStaker } from "@pol/interfaces/IBGTStaker.sol";
@@ -12,12 +13,17 @@ import { ISmartOperator } from "src/interfaces/ISmartOperator.sol";
 import { IIncentiveCollector } from "src/interfaces/IIncentiveCollector.sol";
 import { IStakingPool } from "src/interfaces/IStakingPool.sol";
 
+interface IWBERA is IERC20 {
+    function withdraw(uint256 amount) external;
+}
+
 contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     using SafeERC20 for IERC20;
     // CONSTANTS
 
     // Berachain references
     IBGT public constant BGT = IBGT(0x656b95E550C07a9ffe548bd4085c72418Ceb1dba);
+    IWBERA public constant WBERA = IWBERA(0x6969696969696969696969696969696969696969);
     IBeraChef public constant BERA_CHEF = IBeraChef(0xdf960E8F3F19C481dDE769edEDD439ea1a63426a);
     IBGTStaker public constant BGT_STAKER = IBGTStaker(0x44F07Ce5AfeCbCC406e6beFD40cc2998eEb8c7C6);
     IBGTIncentiveDistributor public constant BGT_INCENTIVE_DISTRIBUTOR =
@@ -59,6 +65,8 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
     uint96 public protocolFeePercentage;
 
+    uint256 internal _wberaBalanceAlreadyCharged;
+
     modifier whenNotFullyExited() {
         if (IStakingPool(_stakingPool).isFullyExited()) {
             revert StakingPoolIsFullyExited();
@@ -69,6 +77,9 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     constructor() {
         _disableInitializers();
     }
+
+    /// @dev Needed to receive native BERA when unwrapping WBERA.
+    receive() external payable { }
 
     function initialize(
         address governance,
@@ -110,7 +121,8 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
-    function queueBoost() external whenNotFullyExited returns (bool) {
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
+    function queueBoost() external whenNotFullyExited onlyRole(BGT_MANAGER_ROLE) returns (bool) {
         (, uint128 queuedBalance) = BGT.boostedQueue(address(this), _pubkey);
         if (queuedBalance == 0) {
             uint256 amount = BGT.unboostedBalanceOf(address(this));
@@ -121,11 +133,13 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
     function activateBoost() external {
         BGT.activateBoost(address(this), _pubkey);
     }
 
     /// @inheritdoc ISmartOperator
+    /// @dev @deprecated BGT boosting is deprecated. Function retained for transition only.
     function queueDropBoost(uint128 amount) external onlyRole(BGT_MANAGER_ROLE) {
         BGT.queueDropBoost(_pubkey, uint128(amount));
     }
@@ -133,15 +147,20 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     /// @inheritdoc ISmartOperator
     function fullExitQueueDropBoost() external {
         _validateSender(_stakingPool);
-        _cancelQueueBoost();
-        _cancelQueueDropBoost();
 
-        uint128 amount = BGT.boosted(address(this), _pubkey);
-        if (amount > 0) {
-            BGT.queueDropBoost(_pubkey, uint128(amount));
+        if (BGT.balanceOf(address(this)) > 0) {
+            _cancelQueueBoost();
+            _cancelQueueDropBoost();
+
+            uint128 amount = BGT.boosted(address(this), _pubkey);
+            if (amount > 0) {
+                BGT.queueDropBoost(_pubkey, uint128(amount));
+            }
+
+            _updateEarnedBGTFees();
         }
 
-        _updateEarnedBGTFees();
+        _updateEarnedWBERAFees();
     }
 
     /// @inheritdoc ISmartOperator
@@ -182,6 +201,26 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    function withdrawRewards(uint256 amount) external {
+        _validateSender(_stakingPool);
+        _updateEarnedWBERAFees();
+        WBERA.withdraw(amount);
+        IStakingPool(_stakingPool).receiveRewards{ value: amount }();
+        _wberaBalanceAlreadyCharged = WBERA.balanceOf(address(this));
+        emit WBERADepositedToPool(amount);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function pullBeraToWithdrawalVault(uint256 amount) external {
+        _validateSender(_withdrawalVault);
+        _updateEarnedWBERAFees();
+        WBERA.withdraw(amount);
+        SafeTransferLib.safeTransferETH(_withdrawalVault, amount);
+        _wberaBalanceAlreadyCharged = WBERA.balanceOf(address(this));
+        emit WBERASentToWithdrawalVault(amount);
+    }
+
+    /// @inheritdoc ISmartOperator
     function queueRewardsAllocation(
         uint64 startBlock,
         IBeraChef.Weight[] calldata weights
@@ -202,6 +241,18 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
         uint256 balance = BGT.balanceOf(address(this));
         uint256 chargableBgtBalance = balance - _bgtBalanceAlreadyCharged;
         return balance - _computeFee(chargableBgtBalance);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function rebaseableWberaAmount() external view returns (uint256) {
+        uint256 balance = WBERA.balanceOf(address(this));
+        uint256 chargeableBalance = balance - _wberaBalanceAlreadyCharged;
+        return balance - _computeFee(chargeableBalance);
+    }
+
+    /// @inheritdoc ISmartOperator
+    function availableWBERABalance() external view returns (uint256) {
+        return WBERA.balanceOf(address(this));
     }
 
     /// @inheritdoc ISmartOperator
@@ -226,6 +277,22 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    function getEarnedWBERAFeeState()
+        external
+        view
+        returns (uint256 currentBalance, uint256 wberaBalanceAlreadyCharged, uint256 chargeableBalance, uint96)
+    {
+        currentBalance = WBERA.balanceOf(address(this));
+        wberaBalanceAlreadyCharged = _wberaBalanceAlreadyCharged;
+
+        if (currentBalance > wberaBalanceAlreadyCharged) {
+            chargeableBalance = currentBalance - wberaBalanceAlreadyCharged;
+        }
+
+        return (currentBalance, wberaBalanceAlreadyCharged, chargeableBalance, protocolFeePercentage);
+    }
+
+    /// @inheritdoc ISmartOperator
     function queueIncentiveCollectorPayoutAmountChange(uint256 newPayoutAmount)
         external
         onlyRole(INCENTIVE_COLLECTOR_MANAGER_ROLE)
@@ -234,6 +301,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    /// @dev @deprecated BGT staking rewards are deprecated. Function retained for transition only.
     function claimBgtStakerReward() external returns (uint256) {
         uint256 rewards = _claimBgtStakerReward();
         IERC20(HONEY_TOKEN).transfer(_incentiveCollector, rewards);
@@ -241,6 +309,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @inheritdoc ISmartOperator
+    /// @dev @deprecated BGT boost incentives are deprecated. Function retained for transition only.
     function claimBoostRewards(IBGTIncentiveDistributor.Claim[] calldata claims, address[] memory tokens) external {
         _claimBgtStakerReward();
 
@@ -248,14 +317,12 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
             BGT_INCENTIVE_DISTRIBUTOR.claim(claims);
         }
 
-        for (uint256 i = 0; i < tokens.length; i++) {
-            IERC20 token = IERC20(tokens[i]);
-            uint256 balance = token.balanceOf(address(this));
+        _moveERC20ToIncentiveCollector(tokens);
+    }
 
-            if (balance > 0) {
-                token.safeTransfer(_incentiveCollector, balance);
-            }
-        }
+    /// @inheritdoc ISmartOperator
+    function moveERC20ToIncentiveCollector(address[] memory tokens) external {
+        _moveERC20ToIncentiveCollector(tokens);
     }
 
     /// @inheritdoc ISmartOperator
@@ -276,6 +343,7 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
 
         // Update base rate charged fees before the protocol fee percentage is changed
         _updateEarnedBGTFees();
+        _updateEarnedWBERAFees();
 
         protocolFeePercentage = protocolFeePercentage_;
         emit ProtocolFeePercentageSet(protocolFeePercentage_);
@@ -284,6 +352,11 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     /// @inheritdoc ISmartOperator
     function accrueEarnedBGTFees() external whenNotFullyExited {
         _updateEarnedBGTFees();
+    }
+
+    /// @inheritdoc ISmartOperator
+    function accrueEarnedWBERAFees() external whenNotFullyExited {
+        _updateEarnedWBERAFees();
     }
 
     /// @inheritdoc ISmartOperator
@@ -301,7 +374,6 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     // INTERNAL FUNCTIONS
 
     /// @dev Cancels any queued boost for the smart operator.
-    /// @dev Used to cancel any queued boost for the smart operator if unboosting during a full exit.
     function _cancelQueueBoost() internal {
         (, uint128 balance) = BGT.boostedQueue(address(this), _pubkey);
         if (balance > 0) {
@@ -310,7 +382,6 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @dev Cancel any queued drop boost for the smart operator.
-    /// @dev Used to cancel any queued drop boost for the smart operator if dropping during a full exit.
     function _cancelQueueDropBoost() internal {
         (, uint128 balance) = BGT.dropBoostQueue(address(this), _pubkey);
         if (balance > 0) {
@@ -331,31 +402,56 @@ contract SmartOperator is ISmartOperator, AccessControlUpgradeable {
     }
 
     /// @dev Updates and charges base rate fees on the chargeable BGT balance.
-    /// @dev Only charges fees on the difference between current balance and previously charged amount.
-    /// @dev Updates the base rate charged tracker to prevent double fee charging.
     function _updateEarnedBGTFees() internal {
         uint256 currentBalance = BGT.balanceOf(address(this));
         uint256 chargeableBalance = currentBalance - _bgtBalanceAlreadyCharged;
 
-        // Early return if no new balance to charge fees on
         if (chargeableBalance == 0) {
             return;
         }
 
-        // Compute and charge fees only if there's a protocol fee percentage set
         if (protocolFeePercentage > 0) {
             uint256 feeAmount = _computeFee(chargeableBalance);
             _accountFees(feeAmount);
         }
 
-        // Update the tracker to prevent double fee charging
         _bgtBalanceAlreadyCharged = currentBalance;
+    }
+
+    /// @dev Updates and charges base rate fees on the chargeable WBERA balance.
+    function _updateEarnedWBERAFees() internal {
+        uint256 currentBalance = WBERA.balanceOf(address(this));
+        uint256 chargeableBalance = currentBalance - _wberaBalanceAlreadyCharged;
+
+        if (chargeableBalance == 0) {
+            return;
+        }
+
+        if (protocolFeePercentage > 0) {
+            uint256 feeAmount = _computeFee(chargeableBalance);
+            _accountFees(feeAmount);
+        }
+
+        _wberaBalanceAlreadyCharged = currentBalance;
     }
 
     /// @dev Mints shares to the validator instead of accruing fees.
     function _accountFees(uint256 amount) internal {
         if (amount > 0) {
             IStakingPool(_stakingPool).mintFeeShares(amount);
+        }
+    }
+
+    /// @dev Moves the given tokens to the incentive collector to be auctioned.
+    /// @dev WBERA is skipped: as it is the pool's underlying asset.
+    function _moveERC20ToIncentiveCollector(address[] memory tokens) internal {
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == address(WBERA)) continue;
+            IERC20 token = IERC20(tokens[i]);
+            uint256 balance = token.balanceOf(address(this));
+            if (balance > 0) {
+                token.safeTransfer(_incentiveCollector, balance);
+            }
         }
     }
 }
