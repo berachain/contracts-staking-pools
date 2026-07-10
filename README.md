@@ -2,6 +2,8 @@
 
 Solidity contracts for Berachain **validator staking pools**: liquid staking via **stBERA**, per-validator operator tooling, delegation, and withdrawal handling. Built with [Foundry](https://book.getfoundry.sh/).
 
+For how the system works end-to-end, see the [Staking Pools overview](https://docs.berachain.com/nodes/staking-pools/overview) on docs.berachain.com.
+
 Depends on [berachain/contracts](https://github.com/berachain/contracts) (`lib/contracts`) for POL interfaces (BeaconDeposit, BGT, BeraChef, etc.).
 
 ## Architecture
@@ -114,7 +116,7 @@ forge script script/deploy/1_DeployContracts.s.sol:DeployStakingPoolContractsFac
 
 RPC endpoints and explorer config are in [`foundry.toml`](foundry.toml).
 
-## Related repos
+## Related
 
+- [Staking Pools overview](https://docs.berachain.com/nodes/staking-pools/overview) — docs.berachain.com
 - [berachain/contracts](https://github.com/berachain/contracts) — core POL / system contracts (submodule)
-- [docs.berachain.com](https://docs.berachain.com) — public documentation
