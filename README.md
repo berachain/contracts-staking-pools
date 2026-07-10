@@ -43,17 +43,7 @@ flowchart LR
     Delegate --> Pool
 ```
 
-### Key constants (Berachain mainnet)
-
-| Item | Value |
-|------|-------|
-| Chain ID | `80094` (Bepolia testnet: `80069`) |
-| BeaconDeposit | `0x4242424242424242424242424242424242424242` |
-| Min CL deposit | 10,000 BERA |
-| Min effective balance | 250,000 BERA |
-| Max effective balance | 10,000,000 BERA |
-
-Deployed addresses live in [`script/StakingPoolAddresses.sol`](script/StakingPoolAddresses.sol).
+Deployed addresses are in [`script/StakingPoolAddresses.sol`](script/StakingPoolAddresses.sol).
 
 ## Repository layout
 
@@ -128,7 +118,3 @@ RPC endpoints and explorer config are in [`foundry.toml`](foundry.toml).
 
 - [berachain/contracts](https://github.com/berachain/contracts) — core POL / system contracts (submodule)
 - [berachain/docs](https://github.com/berachain/docs) — public documentation
-
-## License
-
-BUSL-1.1 (see contract SPDX headers).
