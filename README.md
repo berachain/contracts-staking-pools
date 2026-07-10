@@ -117,4 +117,4 @@ RPC endpoints and explorer config are in [`foundry.toml`](foundry.toml).
 ## Related repos
 
 - [berachain/contracts](https://github.com/berachain/contracts) — core POL / system contracts (submodule)
-- [berachain/docs](https://github.com/berachain/docs) — public documentation
+- [docs.berachain.com](https://docs.berachain.com) — public documentation
