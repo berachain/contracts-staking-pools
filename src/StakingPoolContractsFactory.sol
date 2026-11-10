@@ -76,6 +76,7 @@ contract StakingPoolContractsFactory is
     )
         external
         payable
+        virtual
         returns (address, address, address, address)
     {
         _validateInputs(pubkey, withdrawalCredentials);
@@ -130,6 +131,7 @@ contract StakingPoolContractsFactory is
         uint64 timestamp
     )
         external
+        virtual
     {
         if (validatorData.initialDepositAmount < FIRST_DEPOSIT_AMOUNT_GWEI) {
             revert InvalidInitialDepositAmount();
