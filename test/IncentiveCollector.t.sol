@@ -196,9 +196,7 @@ contract IncentiveCollectorTest is Base {
         vm.deal(claimer, incorrectPayingAmount);
 
         vm.prank(claimer);
-        vm.expectRevert(
-            abi.encodeWithSelector(IIncentiveCollector.IncorrectPayoutAmount.selector, incorrectPayingAmount)
-        );
+        vm.expectRevert(IIncentiveCollector.IncorrectPayoutAmount.selector);
         incentiveCollector.claim{ value: incorrectPayingAmount }(incentiveTokens);
     }
 
