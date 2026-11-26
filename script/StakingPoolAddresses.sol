@@ -6,6 +6,7 @@ import { ChainType, ChainHelper } from "script/base/Chain.sol";
 struct StakingPoolAddresses {
     address stakingPoolContractsFactory;
     address stakingPoolContractsFactoryImpl;
+    address stakingPoolContractsFactoryDisabledImpl;
     address withdrawalVault;
     address withdrawalVaultImpl;
     address accountingOracle;
@@ -38,6 +39,7 @@ abstract contract StakingPoolAddressBook {
         return StakingPoolAddresses({
             stakingPoolContractsFactory: 0xb79b43dBA821Cb67751276Ce050fF4111445fB99,
             stakingPoolContractsFactoryImpl: 0xB6699b83D441B185c3D1D9E5F8211a2c80f2A185,
+            stakingPoolContractsFactoryDisabledImpl: 0x284e17F2A2EDB60d2695959aeB444f76322c65Ce,
             withdrawalVault: 0xE858802Ed532C6DAD2D196AB5B1F2C15F9cb52b4,
             withdrawalVaultImpl: 0x808356Ac7AecCc7345e079e7e54aFeeDe9116827,
             accountingOracle: 0x89144B6342d8eB3DdC631a9c452A8414541426bb,
@@ -56,6 +58,7 @@ abstract contract StakingPoolAddressBook {
         return StakingPoolAddresses({
             stakingPoolContractsFactory: 0x24b8223864d3936F56e5a24C4245ae7620471D4C,
             stakingPoolContractsFactoryImpl: 0xB25EBb40d51932494b378b4C07957a30dd68F205,
+            stakingPoolContractsFactoryDisabledImpl: 0xb46c705Ac3587b6fA8F3FCd1C71459AEe464D643,
             withdrawalVault: 0xBBed2D94338cdE2926A8C0576432De32C05c66e9,
             withdrawalVaultImpl: 0xdf1Bef8f8B406520Ff6Fe8393e373F06d8a5A673,
             accountingOracle: 0x7f3eADA99702AD0E64b8B66808c2F85de4bF20da,
@@ -74,6 +77,7 @@ abstract contract StakingPoolAddressBook {
         return StakingPoolAddresses({
             stakingPoolContractsFactory: 0xa1d40895F8a2e86488c9fdd7294e6c05C4160fc1,
             stakingPoolContractsFactoryImpl: 0x2a36A43cDaFdEfeFA213d6C6243dEA60106E796C,
+            stakingPoolContractsFactoryDisabledImpl: address(0), // not deployed on devnet
             withdrawalVault: 0x5A7dC97A14c53E78C84A0143c084CDA10E87b783,
             withdrawalVaultImpl: 0x9C8ca1c6794e19D5524e6E57189f75520c9C0fa6,
             accountingOracle: 0xf57ae73b7A950C38252fd866CD5fc2A87BCb6F3F,
@@ -92,6 +96,7 @@ abstract contract StakingPoolAddressBook {
         return StakingPoolAddresses({
             stakingPoolContractsFactory: 0xc9CF23f48A44b9229790a84D326E8871f193c614,
             stakingPoolContractsFactoryImpl: 0xaE9Ba445b7E730F86ba302dEd48E612d414031cb,
+            stakingPoolContractsFactoryDisabledImpl: address(0), // not deployed on anvil
             withdrawalVault: 0xcf58d6BB8cA95B2B0B1807299f8B7d78cA0d0ff5,
             withdrawalVaultImpl: 0x0215599CDAe71CA1d4e9c2D7670B4f49baf438Ae,
             accountingOracle: 0xD924595389F10f600C953D6eC537605e2fA2580E,

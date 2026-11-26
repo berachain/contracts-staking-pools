@@ -4,6 +4,7 @@ pragma solidity 0.8.30;
 import { BasePredictScript, console2 } from "script/base/BasePredict.s.sol";
 import { AccountingOracle } from "src/AccountingOracle.sol";
 import { StakingPoolContractsFactory } from "src/StakingPoolContractsFactory.sol";
+import { StakingPoolContractsFactoryDisabled } from "src/StakingPoolContractsFactoryDisabled.sol";
 import { SmartOperator } from "src/core/SmartOperator.sol";
 import { StakingPool } from "src/core/StakingPool.sol";
 import { StakingRewardsVault } from "src/core/StakingRewardsVault.sol";
@@ -18,6 +19,10 @@ contract ImplementationPredictAddressesScript is BasePredictScript, AddressBook 
         // StakingPoolContractsFactory
         _predictProxyAddress("StakingPoolContractsFactory", type(StakingPoolContractsFactory).creationCode);
         _predictAddress("StakingPoolContractsFactory Implementation", type(StakingPoolContractsFactory).creationCode);
+        _predictAddress(
+            "StakingPoolContractsFactoryDisabled Implementation",
+            type(StakingPoolContractsFactoryDisabled).creationCode
+        );
 
         // WithdrawalVault
         _predictProxyAddress("WithdrawalVault", type(WithdrawalVault).creationCode);

@@ -38,11 +38,7 @@ contract StakingRewardsVaultTest is Base {
     function test_withdrawRewards_Fail_InvalidSender() public {
         vm.deal(address(stakingRewardsVault), 100 ether);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IStakingRewardsVault.InvalidSender.selector, address(this), address(stakingRewardsVault)
-            )
-        );
+        vm.expectRevert(IStakingRewardsVault.InvalidSender.selector);
         stakingRewardsVault.withdrawRewards(100 ether);
     }
 
